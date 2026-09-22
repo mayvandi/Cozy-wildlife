@@ -40,7 +40,9 @@
 <script type="module">
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
+import { WebGPURenderer } from 'three/webgpu';
 
+THREE.ColorManagement.enabled = false;
 const hudRnd = document.getElementById('rnd');
 const hudFps = document.getElementById('fps');
 
