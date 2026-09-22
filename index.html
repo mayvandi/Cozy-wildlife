@@ -171,7 +171,8 @@ terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 terrainGeo.computeVertexNormals();
 
 const terrainMat = new THREE.MeshStandardMaterial({
-  vertexColors: true, roughness: 0.92, metalness: 0.0
+  const terrainMat = new THREE.MeshBasicMaterial({
+  vertexColors: true
 });
 scene.add(new THREE.Mesh(terrainGeo, terrainMat));
 
