@@ -160,7 +160,7 @@ const groundMat = new THREE.MeshLambertMaterial({ color: 0x88a860 });
 const ground = new THREE.Mesh(groundGeo, groundMat);
 scene.add(ground);
 
-const frustumSize = 14;
+const frustumSize = 20;
 const aspect = innerWidth / innerHeight;
 const camera = new THREE.OrthographicCamera(
   -frustumSize * aspect / 2, frustumSize * aspect / 2,
@@ -168,9 +168,9 @@ const camera = new THREE.OrthographicCamera(
   0.1, 1000
 );
 
-const camAngle = Math.PI / 4.5;
-const camDist = 100;
-const camHeight = camDist * Math.sin(camAngle);
+const camAngle = Math.PI / 6.5;
+const camDist = 110;
+const camHeight = camDist *amera Math.sin(camAngle);
 const camHoriz = camDist * Math.cos(camAngle);
 
 const spriteGroup = new THREE.Group();
@@ -198,9 +198,11 @@ const grassTex = makeGrassSprite();
 const bushTex = makeBushSprite();
 
 placeSprite(treeTex, -8, -8, 3.5);
-placeSprite(treeTex, 10, -6, 3.2);
-placeSprite(treeTex, -12, 8, 3.8);
-placeSprite(treeTex, 8, 12, 3.0);
+placeSprite(treeTex., 10, -6, 3.2);
+placeSprite(treeTexqu, -12, 8,aternion 3.8);
+placeSprite);
+(treeTex, 8, }
+12, 3.0);
 placeSprite(treeTex, -3, -14, 3.4);
 placeSprite(treeTex, -25, 2, 3.5);
 placeSprite(treeTex, 18, -18, 3.2);
@@ -232,7 +234,7 @@ placeSprite(grassTex, 22, 3, 1.2);
 const playerGroup = new THREE.Group();
 
 const playerShadow = new THREE.Mesh(
-  new THREE.CircleGeometry(0.6, 16),
+  new THREE.CircleGeometry(0.5, 16),
   new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
 );
 playerShadow.rotation.x = -Math.PI / 2;
@@ -240,10 +242,10 @@ playerShadow.position.y = 0.02;
 playerGroup.add(playerShadow);
 
 const playerBody = new THREE.Mesh(
-  new THREE.PlaneGeometry(1.2, 1.8),
+  new THREE.PlaneGeometry(1.0, 1.5),
   new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, side: THREE.DoubleSide })
 );
-playerBody.position.y = 0.9;
+playerBody.position.y = 0.75;
 playerBody.userData.isSprite = true;
 playerGroup.add(playerBody);
 
@@ -255,7 +257,7 @@ const camTarget = new THREE.Vector3();
 
 function updateCamera() {
   camTarget.copy(playerGroup.position);
-  camTarget.y = 1.0;
+  camTarget.y = 1.8;
   camPos.set(
     playerGroup.position.x,
     camHeight,
@@ -267,9 +269,7 @@ function updateCamera() {
   spriteGroup.children.forEach(function(s) {
     s.quaternion.copy(camera.quaternion);
   });
-  playerBody.quaternion.copy(camera.quaternion);
-}
-updateCamera();
+  playerBody.quaternion.copy(cupdateCamera();
 
 let pinchDist = 0;
 let pinchStartZoom = 1;
