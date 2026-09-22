@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Octopath Test v4</title>
+<title>Cozy Wildlife</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden;
@@ -12,7 +12,7 @@
   canvas { display: block; width: 100%; height: 100%; }
   #hud { position: fixed; top: 16px; left: 16px;
     color: #fff; font-size: 11px; font-family: ui-monospace, monospace;
-    background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 10px;
+    background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 10px;
     z-index: 10; pointer-events: none; line-height: 1.6;
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
   .ok { color: #7dfba7; }
@@ -33,7 +33,6 @@
 <div id="hud">
   <div id="rnd">Init...</div>
   <div id="fps">-- FPS</div>
-  <div id="info">--</div>
 </div>
 <div id="joy"><div id="joyKnob"></div></div>
 
@@ -50,7 +49,6 @@ import * as THREE from 'three/webgpu';
 
 const hudRnd = document.getElementById('rnd');
 const hudFps = document.getElementById('fps');
-const hudInfo = document.getElementById('info');
 
 const texLoader = new THREE.TextureLoader();
 async function loadSprite(path) {
@@ -79,83 +77,107 @@ renderer.domElement.style.touchAction = 'none';
 hudRnd.innerHTML = 'Renderer: <span class="ok">WebGPU</span>';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 20, 50);
+const skyColor = 0xa8d0e8;
+scene.background = new THREE.Color(skyColor);
+scene.fog = new THREE.Fog(skyColor, 60, 140);
 
-const sun = new THREE.DirectionalLight(0xfff0dd, 2.4);
-sun.position.set(40, 60, 30);
+const sun = new THREE.DirectionalLight(0xfff0dd, 2.2);
+sun.position.set(40, 80, 30);
 scene.add(sun);
-scene.add(new THREE.AmbientLight(0xa8c8e0, 0.7));
-scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x4a5a3a, 0.5));
+scene.add(new THREE.AmbientLight(0xa8c8e0, 0.8));
+scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.5));
 
-function makeCanvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  return c;
+function hash2(x, y) {
+  const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return n - Math.floor(n);
+}
+function valueNoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi);
+  const c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+}
+function fbm(x, y, oct) {
+  oct = oct || 4;
+  let v = 0, a = 1, f = 1, total = 0;
+  for (let i = 0; i < oct; i++) {
+    v += a * valueNoise(x * f, y * f);
+    total += a;
+    f *= 2.03;
+    a *= 0.5;
+  }
+  return v / total;
 }
 
-function makeTextureFromCanvas(c) {
-  const tex = new THREE.CanvasTexture(c);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.generateMipmaps = false;
-  return tex;
+const WORLD_SIZE = 120;
+const WORLD_SEG = 128;
+const HEIGHT_SCALE = 4.5;
+
+const terrainGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, WORLD_SEG, WORLD_SEG);
+terrainGeo.rotateX(-Math.PI / 2);
+
+const pos = terrainGeo.attributes.position;
+const colors = new Float32Array(pos.count * 3);
+
+const cLow = new THREE.Color(0x7ab04a);
+const cMid = new THREE.Color(0x5a8e3a);
+const cHigh = new THREE.Color(0x8a6a3a);
+const cPeak = new THREE.Color(0x9a8a5a);
+
+function terrainHeight(wx, wz) {
+  const nx = wx * 0.025;
+  const nz = wz * 0.025;
+  let h = fbm(nx + 50, nz + 50);
+  h = Math.pow(h, 1.6) * HEIGHT_SCALE;
+  return h;
 }
 
-function makeRockSprite() {
-  const c = makeCanvas(32, 32);
-  const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 32, 32);
-  ctx.fillStyle = '#7a7268';
-  ctx.fillRect(8, 18, 16, 10);
-  ctx.fillRect(6, 20, 20, 6);
-  ctx.fillRect(10, 14, 12, 6);
-  ctx.fillStyle = '#9a9288';
-  ctx.fillRect(10, 14, 8, 2);
-  ctx.fillRect(8, 18, 8, 2);
-  ctx.fillStyle = '#5a5448';
-  ctx.fillRect(8, 26, 16, 2);
-  ctx.fillRect(6, 24, 20, 2);
-  return makeTextureFromCanvas(c);
+for (let i = 0; i < pos.count; i++) {
+  const x = pos.getX(i);
+  const z = pos.getZ(i);
+  const h = terrainHeight(x, z);
+  pos.setY(i, h);
+
+  const t = Math.max(0, Math.min(1, h / HEIGHT_SCALE));
+  let c;
+  if (t < 0.35) {
+    const tt = t / 0.35;
+    c = cLow.clone().lerp(cMid, tt);
+  } else if (t < 0.75) {
+    const tt = (t - 0.35) / 0.4;
+    c = cMid.clone().lerp(cHigh, tt);
+  } else {
+    const tt = (t - 0.75) / 0.25;
+    c = cHigh.clone().lerp(cPeak, tt);
+  }
+
+  const v = (valueNoise(x * 0.5, z * 0.5) - 0.5) * 0.12;
+  colors[i * 3] = Math.max(0, Math.min(1, c.r + v));
+  colors[i * 3 + 1] = Math.max(0, Math.min(1, c.g + v));
+  colors[i * 3 + 2] = Math.max(0, Math.min(1, c.b + v));
 }
 
-function makeGrassSprite() {
-  const c = makeCanvas(16, 16);
-  const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 16, 16);
-  ctx.fillStyle = '#6a9a4a';
-  ctx.fillRect(4, 8, 1, 6);
-  ctx.fillRect(7, 6, 1, 8);
-  ctx.fillRect(10, 9, 1, 5);
-  ctx.fillStyle = '#5a8a3a';
-  ctx.fillRect(5, 10, 1, 4);
-  ctx.fillRect(9, 8, 1, 6);
-  return makeTextureFromCanvas(c);
-}
+terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+terrainGeo.computeVertexNormals();
 
-function makeBushSprite() {
-  const c = makeCanvas(32, 32);
-  const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 32, 32);
-  ctx.fillStyle = '#4a7a3a';
-  ctx.fillRect(6, 18, 20, 10);
-  ctx.fillRect(8, 14, 16, 6);
-  ctx.fillStyle = '#5a8a4a';
-  ctx.fillRect(10, 12, 12, 6);
-  ctx.fillStyle = '#6a9a5a';
-  ctx.fillRect(12, 10, 8, 4);
-  return makeTextureFromCanvas(c);
-}
+const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+scene.add(terrain);
 
-const groundGeo = new THREE.PlaneGeometry(60, 60);
-groundGeo.rotateX(-Math.PI / 2);
-const groundMat = new THREE.MeshLambertMaterial({ color: 0x88a860 });
-const ground = new THREE.Mesh(groundGeo, groundMat);
-scene.add(ground);
+const frustumSize = 22;
+const aspect = innerWidth / innerHeight;
+const camera = new THREE.OrthographicCamera(
+  -frustumSize * aspect / 2, frustumSize * aspect / 2,
+  frustumSize / 2, -frustumSize / 2,
+  0.1, 500
+);
 
-const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 500);
+const isoAngle = Math.atan(1 / Math.sqrt(2));
+const cameraDist = 90;
+const cameraYaw = Math.PI * 0.25;
 
 const spriteGroup = new THREE.Group();
 scene.add(spriteGroup);
@@ -170,88 +192,88 @@ function placeSprite(tex, x, z, scale) {
   });
   const geo = new THREE.PlaneGeometry(scale, scale);
   const mesh = new THREE.Mesh(geo, material);
-  mesh.position.set(x, scale * 0.5, z);
-  mesh.userData.isSprite = true;
+  const y = terrainHeight(x, z);
+  mesh.position.set(x, y + scale * 0.5, z);
   spriteGroup.add(mesh);
   return mesh;
 }
 
 const treeTex = await loadSprite('IMG_2075.png');
-const rockTex = makeRockSprite();
-const grassTex = makeGrassSprite();
-const bushTex = makeBushSprite();
 
-placeSprite(treeTex, -8, -8, 3.5);
-placeSprite(treeTex, 10, -6, 3.2);
-placeSprite(treeTex, -12, 8, 3.8);
-placeSprite(treeTex, 8, 12, 3.0);
-placeSprite(treeTex, -3, -14, 3.4);
-placeSprite(treeTex, -20, 2, 3.5);
-placeSprite(treeTex, 15, -15, 3.2);
-placeSprite(treeTex, 20, 6, 3.4);
+function placeTreeCluster(cx, cz, count) {
+  for (let i = 0; i < count; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const rad = Math.random() * 5;
+    const x = cx + Math.cos(ang) * rad;
+    const z = cz + Math.sin(ang) * rad;
+    const s = 2.6 + Math.random() * 1.0;
+    placeSprite(treeTex, x, z, s);
+  }
+}
 
-placeSprite(rockTex, 5, 5, 2.2);
-placeSprite(rockTex, -10, -3, 2.0);
-placeSprite(rockTex, 14, 3, 2.5);
-placeSprite(rockTex, -18, 12, 2.2);
-placeSprite(rockTex, 18, -8, 2.1);
-
-placeSprite(bushTex, 3, -10, 2.2);
-placeSprite(bushTex, -14, 3, 2.0);
-placeSprite(bushTex, 12, 10, 2.3);
-placeSprite(bushTex, -5, 14, 2.1);
-placeSprite(bushTex, 15, 14, 2.2);
-
-placeSprite(grassTex, -6, 7, 1.3);
-placeSprite(grassTex, 4, 4, 1.1);
-placeSprite(grassTex, -4, -5, 1.2);
-placeSprite(grassTex, 9, -9, 1.1);
-placeSprite(grassTex, -9, 9, 1.2);
-placeSprite(grassTex, 14, -14, 1.3);
-placeSprite(grassTex, -15, -10, 1.1);
-placeSprite(grassTex, 18, 3, 1.2);
+placeTreeCluster(-18, -18, 7);
+placeTreeCluster(20, -12, 6);
+placeTreeCluster(-10, 20, 8);
+placeTreeCluster(22, 18, 5);
+placeTreeCluster(-28, 2, 6);
+placeTreeCluster(5, -28, 5);
+placeTreeCluster(-2, 8, 3);
+placeTreeCluster(15, 3, 4);
+placeTreeCluster(-22, -8, 4);
 
 const playerGroup = new THREE.Group();
 
 const playerShadow = new THREE.Mesh(
-  new THREE.CircleGeometry(0.5, 16),
-  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
+  new THREE.CircleGeometry(0.55, 16),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false })
 );
 playerShadow.rotation.x = -Math.PI / 2;
-playerShadow.position.y = 0.02;
+playerShadow.position.y = 0.05;
 playerGroup.add(playerShadow);
 
 const playerBody = new THREE.Mesh(
-  new THREE.PlaneGeometry(1.0, 1.5),
+  new THREE.PlaneGeometry(1.0, 1.6),
   new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, side: THREE.DoubleSide })
 );
-playerBody.position.y = 0.75;
-playerBody.userData.isSprite = true;
+playerBody.position.y = 0.85;
 playerGroup.add(playerBody);
 
-playerGroup.position.set(0, 0, 0);
 scene.add(playerGroup);
 
 const camPos = new THREE.Vector3();
 const camTarget = new THREE.Vector3();
-const camOffset = new THREE.Vector3(0, 8, 12);
+const camSmoothPos = new THREE.Vector3();
+const camSmoothTarget = new THREE.Vector3(0, 0, 0);
 
-function updateCamera() {
-  camPos.copy(playerGroup.position).add(camOffset);
-  camTarget.copy(playerGroup.position);
-  camTarget.y += 1.5;
-  camera.position.copy(camPos);
-  camera.lookAt(camTarget);
+function updateCamera(instant) {
+  camTarget.set(playerGroup.position.x, terrainHeight(playerGroup.position.x, playerGroup.position.z) + 0.8, playerGroup.position.z);
+  camPos.set(
+    camTarget.x + cameraDist * Math.cos(isoAngle) * Math.sin(cameraYaw),
+    camTarget.y + cameraDist * Math.sin(isoAngle),
+    camTarget.z + cameraDist * Math.cos(isoAngle) * Math.cos(cameraYaw)
+  );
+
+  if (instant) {
+    camSmoothPos.copy(camPos);
+    camSmoothTarget.copy(camTarget);
+  } else {
+    camSmoothPos.lerp(camPos, 0.08);
+    camSmoothTarget.lerp(camTarget, 0.1);
+  }
+
+  camera.position.copy(camSmoothPos);
+  camera.lookAt(camSmoothTarget);
 
   spriteGroup.children.forEach(function(s) {
     s.quaternion.copy(camera.quaternion);
   });
   playerBody.quaternion.copy(camera.quaternion);
+  playerGroup.position.y = terrainHeight(playerGroup.position.x, playerGroup.position.z);
 }
-updateCamera();
+updateCamera(true);
 
 let pinchDist = 0;
-let pinchStartFov = 45;
+let pinchStartZoom = 1;
 const el = renderer.domElement;
 
 el.addEventListener('touchstart', function(e) {
@@ -260,7 +282,7 @@ el.addEventListener('touchstart', function(e) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchDist = Math.hypot(dx, dy);
-    pinchStartFov = camera.fov;
+    pinchStartZoom = camera.zoom;
   }
 }, { passive: false });
 
@@ -272,7 +294,7 @@ el.addEventListener('touchmove', function(e) {
     const d = Math.hypot(dx, dy);
     if (pinchDist > 0) {
       const ratio = d / pinchDist;
-      camera.fov = Math.max(20, Math.min(70, pinchStartFov / ratio));
+      camera.zoom = Math.max(0.6, Math.min(3.0, pinchStartZoom * ratio));
       camera.updateProjectionMatrix();
     }
   }
@@ -346,7 +368,9 @@ function handleJoyMove(cx, cy) {
   joyKnob.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
 }
 
-const playerSpeed = 5.0;
+const playerSpeed = 7.0;
+const cosY = Math.cos(cameraYaw);
+const sinY = Math.sin(cameraYaw);
 
 let frames = 0;
 let lastFpsT = performance.now();
@@ -358,21 +382,22 @@ function animate() {
   lastT = now;
 
   if (Math.abs(joyVecX) > 0.05 || Math.abs(joyVecY) > 0.05) {
-    const len = Math.hypot(joyVecX, joyVecY);
-    const nx = joyVecX / len;
-    const ny = joyVecY / len;
-    playerGroup.position.x += nx * playerSpeed * dt;
-    playerGroup.position.z += ny * playerSpeed * dt;
+    const wx = joyVecX * cosY + joyVecY * sinY;
+    const wz = -joyVecX * sinY + joyVecY * cosY;
+    playerGroup.position.x += wx * playerSpeed * dt;
+    playerGroup.position.z += wz * playerSpeed * dt;
+    const lim = WORLD_SIZE * 0.45;
+    playerGroup.position.x = Math.max(-lim, Math.min(lim, playerGroup.position.x));
+    playerGroup.position.z = Math.max(-lim, Math.min(lim, playerGroup.position.z));
   }
 
-  updateCamera();
+  updateCamera(false);
   renderer.render(scene, camera);
   frames++;
 
   if (now - lastFpsT > 500) {
     const fps = Math.round(frames * 1000 / (now - lastFpsT));
     hudFps.textContent = fps + ' FPS';
-    hudInfo.textContent = 'x ' + playerGroup.position.x.toFixed(1) + ' z ' + playerGroup.position.z.toFixed(1) + ' fov ' + camera.fov.toFixed(0);
     frames = 0;
     lastFpsT = now;
   }
