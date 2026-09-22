@@ -78,7 +78,16 @@ hudRnd.innerHTML = 'Renderer: <span class="ok">WebGPU</span>';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xa8d0e8);
 scene.fog = new THREE.Fog(0xa8d0e8, 60, 140);
-// === SKY SPHERE GRADIENT ===
+
+const sun = new THREE.DirectionalLight(0xfff0dd, 2.5);
+sun.position.set(40, 80, 30);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xa8c8e0, 0.9));
+scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.6));
+
+const skyMat = new THREE.MeshBasicMaterial({
+  side: THREE.BackSide, fog: false, depthWrite: false
+});
 const skyGeo = new THREE.SphereGeometry(250, 24, 16);
 const skyCols = [];
 const skyPos = skyGeo.attributes.position;
@@ -88,13 +97,10 @@ for (let i = 0; i < skyPos.count; i++) {
   skyCols.push(0.55 + t * 0.30, 0.72 + t * 0.20, 0.92 + t * 0.06);
 }
 skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyCols, 3));
-const skyMat = new THREE.MeshBasicMaterial({
-  side: THREE.BackSide, fog: false, vertexColors: true, depthWrite: false
-});
+skyMat.vertexColors = true;
 const skyMesh = new THREE.Mesh(skyGeo, skyMat);
 scene.add(skyMesh);
 
-// === CLOUD TEXTURE (procedural FBM) ===
 function hash2c(x, y) {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
   return n - Math.floor(n);
@@ -146,7 +152,6 @@ function makeCloudTexture() {
 }
 const cloudTex = makeCloudTexture();
 
-// === CLOUD PLANE ===
 const cloudGeo = new THREE.PlaneGeometry(1200, 1200);
 cloudGeo.rotateX(Math.PI / 2);
 const cloudMat = new THREE.MeshBasicMaterial({
@@ -157,7 +162,6 @@ const cloudPlane = new THREE.Mesh(cloudGeo, cloudMat);
 cloudPlane.position.y = 25;
 scene.add(cloudPlane);
 
-// === SUN SPRITE ===
 function makeSunTex() {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 128;
@@ -181,7 +185,6 @@ const sunSprite = new THREE.Mesh(
 );
 scene.add(sunSprite);
 
-// === MOON SPRITE ===
 function makeMoonTex() {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 128;
@@ -204,7 +207,6 @@ const moonSprite = new THREE.Mesh(
 );
 scene.add(moonSprite);
 
-// === STARS ===
 const starCount = 300;
 const starGeo = new THREE.BufferGeometry();
 const starPosArr = new Float32Array(starCount * 3);
@@ -224,34 +226,8 @@ const starMat = new THREE.PointsMaterial({
 const stars = new THREE.Points(starGeo, starMat);
 scene.add(stars);
 
-// Day/night state
 let virtualTimeSky = 0;
 const DAY_DURATION = 180.0;
-
-const sun = new THREE.DirectionalLight(0xfff0dd, 2.5);
-sun.position.set(40, 80, 30);
-scene.add(sun);
-scene.add(new THREE.AmbientLight(0xa8c8e0, 0.9));
-scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.6));
-
-const skyGeo = new THREE.SphereGeometry(250, 16, 32);
-const skyColors = [];
-const skyPos = skyGeo.attributes.position;
-const skyTop = new THREE.Color(0x5a9ac8);
-const skyBot = new THREE.Color(0xe8e0c8);
-for (let i = 0; i < skyPos.count; i++) {
-  const y = skyPos.getY(i);
-  const t = Math.max(0, Math.min(1, (y / 250) * 0.5 + 0.5));
-  const c = skyBot.clone().lerp(skyTop, t);
-  skyColors.push(c.r, c.g, c.b);
-}
-skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyColors, 3));
-const skyMesh = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({
-  side: THREE.BackSide,
-  fog: false,
-  vertexColors: true
-}));
-scene.add(skyMesh);
 
 function hash2(x, y) {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
@@ -350,57 +326,6 @@ scene.add(terrain);
 const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 1000);
 const camY = 6;
 const camZ = 16;
-
-const cloudGroup = new THREE.Group();
-scene.add(cloudGroup);
-
-function makeCloudTexture() {
-  const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 64;
-  const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 128, 64);
-  for (let i = 0; i < 12; i++) {
-    const cx = 20 + Math.random() * 88;
-    const cy = 20 + Math.random() * 24;
-    const r = 8 + Math.random() * 12;
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    g.addColorStop(0, 'rgba(255,255,255,0.9)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  return tex;
-}
-const cloudTex = makeCloudTexture();
-
-for (let i = 0; i < 12; i++) {
-  const mat = new THREE.MeshBasicMaterial({
-    map: cloudTex,
-    transparent: true,
-    opacity: 0.7 + Math.random() * 0.3,
-    depthWrite: false,
-    fog: false
-  });
-  const w = 30 + Math.random() * 30;
-  const geo = new THREE.PlaneGeometry(w, w * 0.5);
-  const cloud = new THREE.Mesh(geo, mat);
-  const ang = Math.random() * Math.PI * 2;
-  const rad = 50 + Math.random() * 80;
-  cloud.position.set(
-    Math.cos(ang) * rad,
-    40 + Math.random() * 30,
-    Math.sin(ang) * rad
-  );
-  cloud.userData.speed = 0.3 + Math.random() * 0.5;
-  cloudGroup.add(cloud);
-}
 
 const spriteGroup = new THREE.Group();
 scene.add(spriteGroup);
@@ -504,6 +429,7 @@ function updateCamera(instant) {
   camera.lookAt(camSmoothTarget);
 
   skyMesh.position.copy(camera.position);
+  stars.position.copy(camera.position);
 
   spriteGroup.children.forEach(function(s) {
     s.quaternion.copy(camera.quaternion);
@@ -628,70 +554,58 @@ function animate() {
     playerGroup.position.z = Math.max(-lim, Math.min(lim, playerGroup.position.z));
   }
 
-  cloudGroup.children.forEach(function(cloud) {
-    cloud.position.x += cloud.userData.speed * dt;
-    if (cloud.position.x > 150) cloud.position.x = -150;
-    cloud.quaternion.copy(camera.quaternion);
-  });
+  virtualTimeSky += dt;
+  const timeOfDay = (virtualTimeSky % DAY_DURATION) / DAY_DURATION;
+  const sunAngle = timeOfDay * Math.PI * 2 - Math.PI / 2;
+  const sunElev = Math.sin(sunAngle);
+  const dayF = Math.max(0, Math.min(1, (sunElev + 0.15) * 2.5));
 
-// ... input handling ...
-    // ... player movement ...
+  sunSprite.position.set(
+    playerGroup.position.x + Math.cos(sunAngle) * 200,
+    playerGroup.position.y + sunElev * 200,
+    playerGroup.position.z + 30
+  );
+  sunSprite.quaternion.copy(camera.quaternion);
+  sunSprite.visible = sunElev > -0.15;
 
-    // ============ TEMPEL DI SINI ============
-    virtualTimeSky += dt;
-    const timeOfDay = (virtualTimeSky % DAY_DURATION) / DAY_DURATION;
-    const sunAngle = timeOfDay * Math.PI * 2 - Math.PI / 2;
-    const sunElev = Math.sin(sunAngle);
-    const dayF = Math.max(0, Math.min(1, (sunElev + 0.15) * 2.5));
+  moonSprite.position.set(
+    playerGroup.position.x - Math.cos(sunAngle) * 200,
+    playerGroup.position.y - sunElev * 200,
+    playerGroup.position.z - 30
+  );
+  moonSprite.quaternion.copy(camera.quaternion);
+  moonSprite.visible = -sunElev > -0.15;
 
-    sunSprite.position.set(
-      playerGroup.position.x + Math.cos(sunAngle) * 200,
-      playerGroup.position.y + sunElev * 200,
-      playerGroup.position.z + 30
-    );
-    sunSprite.quaternion.copy(camera.quaternion);
-    sunSprite.visible = sunElev > -0.15;
+  skyMesh.position.copy(camera.position);
 
-    moonSprite.position.set(
-      playerGroup.position.x - Math.cos(sunAngle) * 200,
-      playerGroup.position.y - sunElev * 200,
-      playerGroup.position.z - 30
-    );
-    moonSprite.quaternion.copy(camera.quaternion);
-    moonSprite.visible = -sunElev > -0.15;
+  skyMat.color.setRGB(
+    0.15 + dayF * 0.85,
+    0.18 + dayF * 0.82,
+    0.30 + dayF * 0.70
+  );
 
-    skyMesh.position.copy(camera.position);
+  const bgR = 0.05 + dayF * 0.60;
+  const bgG = 0.08 + dayF * 0.56;
+  const bgB = 0.20 + dayF * 0.44;
+  scene.background.setRGB(bgR, bgG, bgB);
+  scene.fog.color.setRGB(bgR, bgG, bgB);
 
-    skyMat.color.setRGB(
-      0.15 + dayF * 0.85,
-      0.18 + dayF * 0.82,
-      0.30 + dayF * 0.70
-    );
+  starMat.opacity = Math.max(0, Math.min(1, -sunElev * 3 + 0.15));
 
-    const bgR = 0.05 + dayF * 0.60;
-    const bgG = 0.08 + dayF * 0.56;
-    const bgB = 0.20 + dayF * 0.44;
-    scene.background.setRGB(bgR, bgG, bgB);
-    scene.fog.color.setRGB(bgR, bgG, bgB);
+  cloudPlane.position.x = playerGroup.position.x;
+  cloudPlane.position.z = playerGroup.position.z;
+  cloudTex.offset.x += dt * 0.004;
+  cloudTex.offset.y += dt * 0.0015;
+  cloudMat.opacity = 0.35 + dayF * 0.35;
 
-    starMat.opacity = Math.max(0, Math.min(1, -sunElev * 3 + 0.15));
+  sun.intensity = 0.3 + dayF * 2.2;
+  sun.position.set(
+    playerGroup.position.x + Math.cos(sunAngle) * 40,
+    playerGroup.position.y + Math.max(10, sunElev * 80 + 20),
+    playerGroup.position.z + 30
+  );
 
-    cloudPlane.position.x = playerGroup.position.x;
-    cloudPlane.position.z = playerGroup.position.z;
-    cloudTex.offset.x += dt * 0.004;
-    cloudTex.offset.y += dt * 0.0015;
-    cloudMat.opacity = 0.35 + dayF * 0.35;
-
-    sun.intensity = 0.3 + dayF * 2.2;
-    sun.position.set(
-      playerGroup.position.x + Math.cos(sunAngle) * 40,
-      playerGroup.position.y + Math.max(10, sunElev * 80 + 20),
-      playerGroup.position.z + 30
-    );
-    // ============ SAMPAI SINI ============
-
-    updateCamera(false);
-renderer.render(scene, camera);
+  updateCamera(false);
   renderer.render(scene, camera);
   frames++;
 
