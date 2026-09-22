@@ -3,42 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>Cozy Wildlife - M0.6</title>
+<title>Cozy Wildlife - M0.7</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #a8d0e8;
-    font-family: -apple-system, system-ui, sans-serif;
-    touch-action: none; -webkit-user-select: none; user-select: none; }
+    font-family: -apple-system, system-ui, sans-serif; touch-action: none; }
   canvas { display: block; width: 100%; height: 100%; }
-  #hud { position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 16px); left: 16px;
+  #hud { position: fixed; top: 16px; left: 16px;
     color: #fff; font-size: 11px; font-family: ui-monospace, monospace;
     background: rgba(0,0,0,0.35); padding: 8px 12px; border-radius: 10px;
-    z-index: 10; pointer-events: none; line-height: 1.6;
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+    z-index: 10; pointer-events: none; line-height: 1.6; }
   .ok { color: #7dfba7; }
-  .warn { color: #ffcc44; }
-  .err { color: #ff7788; }
-  #reset-btn { position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 16px); right: 16px;
+  #reset-btn { position: fixed; top: 16px; right: 16px;
     width: 42px; height: 42px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    color: #fff; font-size: 20px; cursor: pointer;
-    z-index: 10; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    -webkit-tap-highlight-color: transparent; }
-  #reset-btn:active { transform: scale(0.9); }
+    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.35);
+    color: #fff; font-size: 20px; cursor: pointer; z-index: 10; }
 </style>
 </head>
 <body>
 <div id="hud">
   <div id="rnd">Init...</div>
   <div id="fps">-- FPS</div>
-  <div id="info">--</div>
 </div>
-<div id="reset-btn">&#8962;</div>
+<div id="reset-btn">H</div>
 
 <script type="importmap">
 {
@@ -53,25 +41,20 @@
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 
-const hud = {
-  rnd: document.getElementById('rnd'),
-  fps: document.getElementById('fps'),
-  info: document.getElementById('info')
-};
+const hudRnd = document.getElementById('rnd');
+const hudFps = document.getElementById('fps');
 
-// RENDERER
 let renderer;
 try {
   renderer = new WebGPURenderer({ antialias: true, alpha: false });
   await renderer.init();
 } catch (e) {
-  hud.rnd.innerHTML = 'Renderer: <span class="err">GAGAL</span><br>' + e.message;
+  hudRnd.innerHTML = 'Renderer GAGAL: ' + e.message;
   throw e;
 }
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
@@ -79,12 +62,10 @@ let isWebGPU = false;
 try {
   isWebGPU = renderer.backend && renderer.backend.isWebGPUBackend === true;
 } catch (e) { isWebGPU = false; }
-hud.rnd.innerHTML = 'Renderer: <span class="' + (isWebGPU ? 'ok' : 'warn') + '">' + (isWebGPU ? 'WebGPU OK' : 'WebGL fallback') + '</span>';
+hudRnd.innerHTML = 'Renderer: ' + (isWebGPU ? 'WebGPU OK' : 'WebGL fallback');
 
-// SCENE
 const scene = new THREE.Scene();
 
-// SKY GRADIENT - pakai CanvasTexture, bukan sky sphere
 function makeSkyGradient() {
   const c = document.createElement('canvas');
   c.width = 16;
@@ -100,24 +81,19 @@ function makeSkyGradient() {
   ctx.fillRect(0, 0, 16, 512);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.minFilter = THREE.LinearFilter;
-  tex.magFilter = THREE.LinearFilter;
   return tex;
 }
 scene.background = makeSkyGradient();
 
-// FOG - tipis, cuma di ujung jauh
 const FOG_COLOR = 0xd8d0b8;
 scene.fog = new THREE.Fog(FOG_COLOR, 120, 260);
 
-// LIGHTING - kuat dan hangat
 const sun = new THREE.DirectionalLight(0xfff2d8, 8.0);
 sun.position.set(-45, 70, -50);
 scene.add(sun);
 
 scene.add(new THREE.AmbientLight(0xd8e0c8, 4.5));
 
-// NOISE
 function hash2(x, y) {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
   return n - Math.floor(n);
@@ -143,7 +119,6 @@ function fbm(x, y, oct) {
   return v / total;
 }
 
-// TERRAIN
 const TERRAIN_SIZE = 120;
 const TERRAIN_SEG = 128;
 const HEIGHT_SCALE = 7;
@@ -200,23 +175,17 @@ const terrainMat = new THREE.MeshStandardMaterial({
 });
 scene.add(new THREE.Mesh(terrainGeo, terrainMat));
 
-// WATER
 const waterGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 1, 1);
 waterGeo.rotateX(-Math.PI / 2);
 const waterMat = new THREE.MeshStandardMaterial({
-  color: 0x7ec8e0,
-  transparent: true,
-  opacity: 0.75,
-  roughness: 0.2,
-  metalness: 0.1,
-  depthWrite: false
+  color: 0x7ec8e0, transparent: true, opacity: 0.75,
+  roughness: 0.2, metalness: 0.1, depthWrite: false
 });
 const water = new THREE.Mesh(waterGeo, waterMat);
 water.position.y = WATER_LEVEL;
 water.renderOrder = 1;
 scene.add(water);
 
-// TREES
 function makeTree(x, z, scale) {
   scale = scale || 1;
   const g = new THREE.Group();
@@ -255,7 +224,6 @@ for (let i = 0; i < treeSpots.length; i++) {
   if (t) scene.add(t);
 }
 
-// ROCKS
 function makeRock(x, z) {
   const g = new THREE.Group();
   const y = terrainHeight(x, z);
@@ -265,11 +233,7 @@ function makeRock(x, z) {
   for (let i = 0; i < sizes.length; i++) {
     const geo = new THREE.BoxGeometry(sizes[i], sizes[i] * 0.75, sizes[i] * 0.9);
     const rock = new THREE.Mesh(geo, rockMat);
-    rock.position.set(
-      (Math.random() - 0.5) * 0.4,
-      0.4 + i * 0.5,
-      (Math.random() - 0.5) * 0.4
-    );
+    rock.position.set((Math.random() - 0.5) * 0.4, 0.4 + i * 0.5, (Math.random() - 0.5) * 0.4);
     rock.rotation.set(Math.random() * 0.3, Math.random() * Math.PI, Math.random() * 0.3);
     g.add(rock);
   }
@@ -280,7 +244,6 @@ scene.add(makeRock(4, 4));
 scene.add(makeRock(-6, -8));
 scene.add(makeRock(-18, 8));
 
-// CAMERA
 const frustumSize = 45;
 const aspect = innerWidth / innerHeight;
 const camera = new THREE.OrthographicCamera(
@@ -297,15 +260,14 @@ camera.zoom = CAM_DEFAULT.zoom;
 camera.updateProjectionMatrix();
 
 function updateCamera() {
-  const x = CAM_DIST * Math.cos(camPitch) * Math.sin(camYaw);
-  const y = CAM_DIST * Math.sin(camPitch);
-  const z = CAM_DIST * Math.cos(camPitch) * Math.cos(camYaw);
-  camera.position.set(x, y, z);
+  const cx = CAM_DIST * Math.cos(camPitch) * Math.sin(camYaw);
+  const cy = CAM_DIST * Math.sin(camPitch);
+  const cz = CAM_DIST * Math.cos(camPitch) * Math.cos(camYaw);
+  camera.position.set(cx, cy, cz);
   camera.lookAt(0, 3, 0);
 }
 updateCamera();
 
-// RESET
 document.getElementById('reset-btn').addEventListener('click', function() {
   camYaw = CAM_DEFAULT.yaw;
   camPitch = CAM_DEFAULT.pitch;
@@ -314,7 +276,6 @@ document.getElementById('reset-btn').addEventListener('click', function() {
   updateCamera();
 });
 
-// TOUCH
 let dragging = false, lastX = 0, lastY = 0, pinchDist = 0;
 const el = renderer.domElement;
 
@@ -356,26 +317,6 @@ el.addEventListener('touchend', function() {
   pinchDist = 0;
 }, { passive: true });
 
-el.addEventListener('mousedown', function(e) {
-  dragging = true;
-  lastX = e.clientX;
-  lastY = e.clientY;
-});
-el.addEventListener('mousemove', function(e) {
-  if (!dragging) return;
-  camYaw -= (e.clientX - lastX) * 0.008;
-  camPitch = Math.max(0.25, Math.min(1.35, camPitch + (e.clientY - lastY) * 0.005));
-  lastX = e.clientX;
-  lastY = e.clientY;
-  updateCamera();
-});
-el.addEventListener('mouseup', function() { dragging = false; });
-el.addEventListener('wheel', function(e) {
-  camera.zoom = Math.max(0.4, Math.min(3.0, camera.zoom * (1 - e.deltaY * 0.001)));
-  camera.updateProjectionMatrix();
-}, { passive: true });
-
-// RESIZE
 addEventListener('resize', function() {
   const w = innerWidth, h = innerHeight, a = w / h;
   camera.left = -frustumSize * a / 2;
@@ -386,7 +327,6 @@ addEventListener('resize', function() {
   renderer.setSize(w, h);
 });
 
-// LOOP
 let frames = 0;
 let lastFpsT = performance.now();
 function animate() {
@@ -395,8 +335,7 @@ function animate() {
   const now = performance.now();
   if (now - lastFpsT > 500) {
     const fps = Math.round(frames * 1000 / (now - lastFpsT));
-    hud.fps.textContent = fps + ' FPS';
-    hud.info.textContent = 'yaw ' + camYaw.toFixed(2) + ' . pitch ' + camPitch.toFixed(2) + ' . zoom ' + camera.zoom.toFixed(2);
+    hudFps.textContent = fps + ' FPS';
     frames = 0;
     lastFpsT = now;
   }
