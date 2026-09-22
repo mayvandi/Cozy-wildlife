@@ -180,17 +180,9 @@ const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const terrain = new THREE.Mesh(terrainGeo, terrainMat);
 scene.add(terrain);
 
-const frustumSize = 22;
-const aspect = innerWidth / innerHeight;
-const camera = new THREE.OrthographicCamera(
-  -frustumSize * aspect / 2, frustumSize * aspect / 2,
-  frustumSize / 2, -frustumSize / 2,
-  0.1, 500
-);
-
-const isoAngle = Math.atan(1.2);
-const cameraDist = 90;
-const cameraYaw = Math.PI * 0.25;
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 500);
+const camY = 6;
+const camZ = 16;
 
 const spriteGroup = new THREE.Group();
 scene.add(spriteGroup);
@@ -274,17 +266,12 @@ const camSmoothPos = new THREE.Vector3();
 const camSmoothTarget = new THREE.Vector3(0, 0, 0);
 
 function updateCamera(instant) {
-  camTarget.set(
-    playerGroup.position.x,
-    terrainHeightCached(playerGroup.position.x, playerGroup.position.z) + 0.8,
-    playerGroup.position.z
-  );
+  const py = terrainHeightCached(playerGroup.position.x, playerGroup.position.z);
+  camTarget.set(playerGroup.position.x, py + 1.2, playerGroup.position.z);
   camPos.set(
-    camTarget.x + cameraDist * Math.cos(isoAngle) * Math.sin(cameraYaw),
-    camTarget.y + cameraDist * Math.sin(isoAngle),
-    camTarget.z + cameraDist * Math.cos(isoAngle) * Math.cos(cameraYaw)
-  );
-
+    playerGroup.position.x,
+    py + camY,
+    playerGroup.position.z + camZ
   if (instant) {
     camSmoothPos.copy(camPos);
     camSmoothTarget.copy(camTarget);
@@ -305,7 +292,7 @@ function updateCamera(instant) {
 updateCamera(true);
 
 let pinchDist = 0;
-let pinchStartZoom = 1;
+let pinchStartFov = 38;
 const el = renderer.domElement;
 
 el.addEventListener('touchstart', function(e) {
@@ -314,7 +301,7 @@ el.addEventListener('touchstart', function(e) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchDist = Math.hypot(dx, dy);
-    pinchStartZoom = camera.zoom;
+    pinchStartFov = camera.fov;
   }
 }, { passive: false });
 
@@ -326,7 +313,8 @@ el.addEventListener('touchmove', function(e) {
     const d = Math.hypot(dx, dy);
     if (pinchDist > 0) {
       const ratio = d / pinchDist;
-      camera.zoom = Math.max(0.6, Math.min(3.0, pinchStartZoom * ratio));
+      camera.fov = Math.max(20, Math.min(60, pinchStartFov / ratio));
+camera.updateProjectionMatrix();
       camera.updateProjectionMatrix();
     }
   }
@@ -438,13 +426,9 @@ function animate() {
 animate();
 
 addEventListener('resize', function() {
-  const w = innerWidth, h = innerHeight, a = w / h;
-  camera.left = -frustumSize * a / 2;
-  camera.right = frustumSize * a / 2;
-  camera.top = frustumSize / 2;
-  camera.bottom = -frustumSize / 2;
+  camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
+  renderer.setSize(innerWidth, innerHeight);
 });
 </script>
 </body>
