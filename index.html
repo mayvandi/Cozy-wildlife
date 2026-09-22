@@ -71,6 +71,7 @@ try {
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 let isWebGPU = false;
@@ -109,12 +110,11 @@ const FOG_COLOR = 0xd8d0b8;
 scene.fog = new THREE.Fog(FOG_COLOR, 120, 260);
 
 // LIGHTING - kuat dan hangat
-const sun = new THREE.DirectionalLight(0xfff2d8, 3.2);
+const sun = new THREE.DirectionalLight(0xfff2d8, 8.0);
 sun.position.set(-45, 70, -50);
 scene.add(sun);
 
-scene.add(new THREE.AmbientLight(0xd8e0c8, 1.5));
-scene.add(new THREE.HemisphereLight(0xe0f0ff, 0x8a9068, 1.1));
+scene.add(new THREE.AmbientLight(0xd8e0c8, 4.5));
 
 // NOISE
 function hash2(x, y) {
@@ -157,7 +157,7 @@ const pos = terrainGeo.attributes.position;
 const colors = new Float32Array(pos.count * 3);
 
 const cSand  = new THREE.Color(0xf0e0b0);
-const cGrass = new THREE.Color(0x9ec878);
+const cGrass = new THREE.Color(0xb8e090);
 const cDirt  = new THREE.Color(0xb88860);
 const cRock  = new THREE.Color(0xb0a898);
 const cSnow  = new THREE.Color(0xffffff);
