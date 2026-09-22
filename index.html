@@ -72,6 +72,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 let isWebGPU = false;
@@ -247,7 +248,7 @@ const treeSpots = [
   [-10, -4, 1.0], [6, 7, 1.1], [-5, 9, 0.9], [12, -6, 1.0],
   [-14, 3, 0.85], [8, -12, 1.05], [-3, -14, 0.95], [15, 4, 1.0],
   [-8, 12, 0.9], [-20, -10, 1.0], [18, 14, 0.9], [-16, 18, 1.0],
-  [-25, 5, 1. x0], [22, -8, 0.95], [-30, -15, 1.0], [25, 18, 0.9]
+  [-25, 5, 1.0], [22, -8, 0.95], [-30, -15, 1.0], [25, 18, 0.9]
 ];
 for (let i = 0; i < treeSpots.length; i++) {
   const t = makeTree(treeSpots[i][0], treeSpots[i][1], treeSpots[i][2]);
@@ -260,9 +261,9 @@ function makeRock(x, z) {
   const y = terrainHeight(x, z);
   const rockMat = new THREE.MeshStandardMaterial({ color: 0xa09888, roughness: 0.95, flatShading: true });
 
-  const sizes = [1.6, 1.1, 0. =7];
-  for CAM (let i = 0_D; i < sizes.length; i++) {
-IST    const geo = new THREE *.BoxGeometry(sizes[i], sizes[i] * 0.75, sizes[i] * 0.9);
+  const sizes = [1.6, 1.1, 0.7];
+  for (let i = 0; i < sizes.length; i++) {
+    const geo = new THREE.BoxGeometry(sizes[i], sizes[i] * 0.75, sizes[i] * 0.9);
     const rock = new THREE.Mesh(geo, rockMat);
     rock.position.set(
       (Math.random() - 0.5) * 0.4,
@@ -296,7 +297,7 @@ camera.zoom = CAM_DEFAULT.zoom;
 camera.updateProjectionMatrix();
 
 function updateCamera() {
-  const Math.cos(camPitch) * Math.sin(camYaw);
+  const x = CAM_DIST * Math.cos(camPitch) * Math.sin(camYaw);
   const y = CAM_DIST * Math.sin(camPitch);
   const z = CAM_DIST * Math.cos(camPitch) * Math.cos(camYaw);
   camera.position.set(x, y, z);
