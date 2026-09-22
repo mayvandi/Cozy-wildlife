@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Cozy Wildlife - M0.5</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #c8e0d8;
+    font-family: -apple-system, system-ui, sans-serif;
+    touch-action: none; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #hud { position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 16px); left: 16px;
+    color: #fff; font-size: 11px; font-family: ui-monospace, monospace;
+    background: rgba(0,0,0,0.35); padding: 8px 12px; border-radius: 10px;
+    z-index: 10; pointer-events: none; line-height: 1.6;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .ok { color: #7dfba7; }
+  .warn { color: #ffcc44; }
+  .err { color: #ff7788; }
+  #reset-btn { position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 16px); right: 16px;
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff; font-size: 20px; cursor: pointer;
+    z-index: 10; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    -webkit-tap-highlight-color: transparent; transition: transform 0.15s; }
+  #reset-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.28); }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="rnd">Init...</div>
+  <div id="fps">-- FPS</div>
+  <div id="info">--</div>
+</div>
+<div id="reset-btn">&#8962;</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.tsl.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
+
+const hud = {
+  rnd: document.getElementById('rnd'),
+  fps: document.getElementById('fps'),
+  info: document.getElementById('info')
+};
+
+// RENDERER
+let renderer;
+try {
+  renderer = new WebGPURenderer({ antialias: true, alpha: false });
+  await renderer.init();
+} catch (e) {
+  hud.rnd.innerHTML = 'Renderer: <span class="err">GAGAL</span><br>' + e.message;
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+document.body.appendChild(renderer.domElement);
+
+let isWebGPU = false;
+try {
+  isWebGPU = renderer.backend && renderer.backend.isWebGPUBackend === true;
+} catch (e) { isWebGPU = false; }
+hud.rnd.innerHTML = 'Renderer: <span class="' + (isWebGPU ? 'ok' : 'warn') + '">' + (isWebGPU ? 'WebGPU OK' : 'WebGL fallback') + '</span>';
+
+// SCENE + FOG
+const scene = new THREE.Scene();
+const FOG_COLOR = 0xd8d4b8;
+scene.background = new THREE.Color(FOG_COLOR);
+scene.fog = new THREE.Fog(FOG_COLOR, 60, 220);
+
+// SKY DOME
+const skyGeo = new THREE.SphereGeometry(240, 32, 16);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  depthWrite: false,
+  fog: false,
+  uniforms: {
+    uTop:    { value: new THREE.Color(0x7fb8d8) },
+    uBottom: { value: new THREE.Color(0xe8d8b0) },
+    uSunDir: { value: new THREE.Vector3(-45, 40, -50).normalize() },
+    uSunCol: { value: new THREE.Color(0xfff0c8) }
+  },
+  vertexShader: [
+    'varying vec3 vDir;',
+    'void main() {',
+    '  vDir = normalize(position);',
+    '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+    '}'
+  ].join('\n'),
+  fragmentShader: [
+    'varying vec3 vDir;',
+    'uniform vec3 uTop;',
+    'uniform vec3 uBottom;',
+    'uniform vec3 uSunDir;',
+    'uniform vec3 uSunCol;',
+    'void main() {',
+    '  float h = clamp(vDir.y * 0.5 + 0.5, 0.0, 1.0);',
+    '  vec3 sky = mix(uBottom, uTop, smoothstep(0.35, 0.85, h));',
+    '  float sunDot = max(0.0, dot(vDir, normalize(uSunDir)));',
+    '  float sunDisc = smoothstep(0.9995, 0.9999, sunDot);',
+    '  float sunHalo = pow(sunDot, 24.0) * 0.35;',
+    '  vec3 col = sky + uSunCol * (sunDisc * 1.5 + sunHalo);',
+    '  gl_FragColor = vec4(col, 1.0);',
+    '}'
+  ].join('\n')
+});
+const sky = new THREE.Mesh(skyGeo, skyMat);
+scene.add(sky);
+
+// LIGHTING
+const sun = new THREE.DirectionalLight(0xffe8c0, 2.6);
+sun.position.set(-45, 40, -50);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xc8d8b0, 0.85));
+scene.add(new THREE.HemisphereLight(0xcfe0f0, 0x6a7a4a, 0.6));
+
+// NOISE
+function hash2(x, y) {
+  const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return n - Math.floor(n);
+}
+function valueNoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi);
+  const c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+}
+function fbm(x, y, oct) {
+  oct = oct || 5;
+  let v = 0, a = 1, f = 1, total = 0;
+  for (let i = 0; i < oct; i++) {
+    v += a * valueNoise(x * f, y * f);
+    total += a;
+    f *= 2.03;
+    a *= 0.5;
+  }
+  return v / total;
+}
+
+// TERRAIN
+const TERRAIN_SIZE = 120;
+const TERRAIN_SEG = 128;
+const HEIGHT_SCALE = 7;
+const EDGE_START = 0.55;
+const EDGE_STRENGTH = 14;
+const WATER_LEVEL = 1.0;
+
+const terrainGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEG, TERRAIN_SEG);
+terrainGeo.rotateX(-Math.PI / 2);
+
+const pos = terrainGeo.attributes.position;
+const colors = new Float32Array(pos.count * 3);
+
+const cSand  = new THREE.Color(0xe8d8a8);
+const cGrass = new THREE.Color(0x88b060);
+const cDirt  = new THREE.Color(0xa07850);
+const cRock  = new THREE.Color(0x9a9088);
+const cSnow  = new THREE.Color(0xf0f0e8);
+
+function terrainHeight(wx, wz) {
+  const nx = wx * 0.035;
+  const nz = wz * 0.035;
+  let h = fbm(nx + 100, nz + 100) * 2 - 1;
+  h = Math.abs(h) * HEIGHT_SCALE;
+  const edgeD = Math.max(Math.abs(wx), Math.abs(wz)) / (TERRAIN_SIZE * 0.5);
+  const edgeRise = Math.pow(Math.max(0, edgeD - EDGE_START) / (1 - EDGE_START), 2) * EDGE_STRENGTH;
+  return h + edgeRise;
+}
+
+for (let i = 0; i < pos.count; i++) {
+  const x = pos.getX(i);
+  const z = pos.getZ(i);
+  const h = terrainHeight(x, z);
+  pos.setY(i, h);
+
+  let c;
+  if (h < WATER_LEVEL + 0.3) c = cSand;
+  else if (h < 3.5) c = cGrass;
+  else if (h < 7) c = cDirt;
+  else if (h < 11) c = cRock;
+  else c = cSnow;
+
+  const v = (valueNoise(x * 0.4, z * 0.4) - 0.5) * 0.15;
+  colors[i * 3]     = Math.max(0, Math.min(1, c.r + v));
+  colors[i * 3 + 1] = Math.max(0, Math.min(1, c.g + v));
+  colors[i * 3 + 2] = Math.max(0, Math.min(1, c.b + v));
+}
+
+terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+terrainGeo.computeVertexNormals();
+
+const terrainMat = new THREE.MeshStandardMaterial({
+  vertexColors: true, roughness: 0.9, metalness: 0.0
+});
+scene.add(new THREE.Mesh(terrainGeo, terrainMat));
+
+// WATER
+const waterGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 1, 1);
+waterGeo.rotateX(-Math.PI / 2);
+const waterMat = new THREE.MeshStandardMaterial({
+  color: 0x6aaccc,
+  transparent: true,
+  opacity: 0.72,
+  roughness: 0.15,
+  metalness: 0.15,
+  depthWrite: false
+});
+const water = new THREE.Mesh(waterGeo, waterMat);
+water.position.y = WATER_LEVEL;
+water.renderOrder = 1;
+scene.add(water);
+
+// TREES
+function makeTree(x, z, scale) {
+  scale = scale || 1;
+  const g = new THREE.Group();
+  const y = terrainHeight(x, z);
+  if (y < WATER_LEVEL + 0.5) return null;
+
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6a4a30, roughness: 1.0 });
+  const leafMat  = new THREE.MeshStandardMaterial({ color: 0x6a9a48, roughness: 0.9, flatShading: true });
+
+  const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.2, 0.5), trunkMat);
+  trunk.position.y = 1.1;
+  g.add(trunk);
+
+  const sizes = [2.6, 1.9, 1.2];
+  for (let i = 0; i < sizes.length; i++) {
+    const geo = new THREE.BoxGeometry(sizes[i], sizes[i] * 0.65, sizes[i]);
+    const leaf = new THREE.Mesh(geo, leafMat);
+    leaf.position.y = 2.8 + i * 0.95;
+    leaf.rotation.y = i * 0.7;
+    g.add(leaf);
+  }
+
+  g.position.set(x, y, z);
+  g.scale.setScalar(scale);
+  return g;
+}
+
+const treeSpots = [
+  [-10, -4, 1.0], [6, 7, 1.1], [-5, 9, 0.9], [12, -6, 1.0],
+  [-14, 3, 0.85], [8, -12, 1.05], [-3, -14, 0.95], [15, 4, 1.0],
+  [-8, 12, 0.9], [-20, -10, 1.0], [18, 14, 0.9], [-16, 18, 1.0]
+];
+for (let i = 0; i < treeSpots.length; i++) {
+  const t = makeTree(treeSpots[i][0], treeSpots[i][1], treeSpots[i][2]);
+  if (t) scene.add(t);
+}
+
+// ROCKS
+function makeRock(x, z) {
+  const g = new THREE.Group();
+  const y = terrainHeight(x, z);
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x8a8278, roughness: 0.95, flatShading: true });
+
+  const sizes = [1.6, 1.1, 0.7];
+  for (let i = 0; i < sizes.length; i++) {
+    const geo = new THREE.BoxGeometry(sizes[i], sizes[i] * 0.75, sizes[i] * 0.9);
+    const rock = new THREE.Mesh(geo, rockMat);
+    rock.position.set(
+      (Math.random() - 0.5) * 0.4,
+      0.4 + i * 0.5,
+      (Math.random() - 0.5) * 0.4
+    );
+    rock.rotation.set(Math.random() * 0.3, Math.random() * Math.PI, Math.random() * 0.3);
+    g.add(rock);
+  }
+  g.position.set(x, y, z);
+  return g;
+}
+scene.add(makeRock(4, 4));
+scene.add(makeRock(-6, -8));
+scene.add(makeRock(-18, 8));
+
+// CAMERA
+const frustumSize = 45;
+const aspect = innerWidth / innerHeight;
+const camera = new THREE.OrthographicCamera(
+  -frustumSize * aspect / 2, frustumSize * aspect / 2,
+  frustumSize / 2, -frustumSize / 2,
+  0.1, 500
+);
+
+const CAM_DIST = 80;
+const CAM_DEFAULT = { yaw: 0.78, pitch: 0.615, zoom: 1.0 };
+let camYaw = CAM_DEFAULT.yaw;
+let camPitch = CAM_DEFAULT.pitch;
+camera.zoom = CAM_DEFAULT.zoom;
+camera.updateProjectionMatrix();
+
+function updateCamera() {
+  const x = CAM_DIST * Math.cos(camPitch) * Math.sin(camYaw);
+  const y = CAM_DIST * Math.sin(camPitch);
+  const z = CAM_DIST * Math.cos(camPitch) * Math.cos(camYaw);
+  camera.position.set(x, y, z);
+  camera.lookAt(0, 3, 0);
+  sky.position.copy(camera.position);
+}
+updateCamera();
+
+// RESET
+document.getElementById('reset-btn').addEventListener('click', function() {
+  camYaw = CAM_DEFAULT.yaw;
+  camPitch = CAM_DEFAULT.pitch;
+  camera.zoom = CAM_DEFAULT.zoom;
+  camera.updateProjectionMatrix();
+  updateCamera();
+});
+
+// TOUCH CONTROLS
+let dragging = false, lastX = 0, lastY = 0, pinchDist = 0;
+const el = renderer.domElement;
+
+el.addEventListener('touchstart', function(e) {
+  if (e.touches.length === 1) {
+    dragging = true;
+    lastX = e.touches[0].clientX;
+    lastY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchDist = Math.hypot(dx, dy);
+  }
+}, { passive: true });
+
+el.addEventListener('touchmove', function(e) {
+  if (e.touches.length === 1 && dragging) {
+    const dx = e.touches[0].clientX - lastX;
+    const dy = e.touches[0].clientY - lastY;
+    lastX = e.touches[0].clientX;
+    lastY = e.touches[0].clientY;
+    camYaw -= dx * 0.008;
+    camPitch = Math.max(0.25, Math.min(1.35, camPitch + dy * 0.005));
+    updateCamera();
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const d = Math.hypot(dx, dy);
+    if (pinchDist > 0) {
+      camera.zoom = Math.max(0.4, Math.min(3.0, camera.zoom * (pinchDist / d)));
+      camera.updateProjectionMatrix();
+    }
+    pinchDist = d;
+  }
+}, { passive: true });
+
+el.addEventListener('touchend', function() {
+  dragging = false;
+  pinchDist = 0;
+}, { passive: true });
+
+el.addEventListener('mousedown', function(e) {
+  dragging = true;
+  lastX = e.clientX;
+  lastY = e.clientY;
+});
+el.addEventListener('mousemove', function(e) {
+  if (!dragging) return;
+  camYaw -= (e.clientX - lastX) * 0.008;
+  camPitch = Math.max(0.25, Math.min(1.35, camPitch + (e.clientY - lastY) * 0.005));
+  lastX = e.clientX;
+  lastY = e.clientY;
+  updateCamera();
+});
+el.addEventListener('mouseup', function() { dragging = false; });
+el.addEventListener('wheel', function(e) {
+  camera.zoom = Math.max(0.4, Math.min(3.0, camera.zoom * (1 - e.deltaY * 0.001)));
+  camera.updateProjectionMatrix();
+}, { passive: true });
+
+// RESIZE
+addEventListener('resize', function() {
+  const w = innerWidth, h = innerHeight, a = w / h;
+  camera.left = -frustumSize * a / 2;
+  camera.right = frustumSize * a / 2;
+  camera.top = frustumSize / 2;
+  camera.bottom = -frustumSize / 2;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+// LOOP
+let frames = 0;
+let lastFpsT = performance.now();
+function animate() {
+  renderer.render(scene, camera);
+  frames++;
+  const now = performance.now();
+  if (now - lastFpsT > 500) {
+    const fps = Math.round(frames * 1000 / (now - lastFpsT));
+    hud.fps.textContent = fps + ' FPS';
+    hud.info.textContent = 'yaw ' + camYaw.toFixed(2) + ' . pitch ' + camPitch.toFixed(2) + ' . zoom ' + camera.zoom.toFixed(2);
+    frames = 0;
+    lastFpsT = now;
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
