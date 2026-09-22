@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Cozy Wildlife - Voxel</title>
+<title>Cozy Wildlife</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden;
@@ -13,8 +13,7 @@
   #hud { position: fixed; top: 16px; left: 16px;
     color: #fff; font-size: 11px; font-family: ui-monospace, monospace;
     background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 10px;
-    z-index: 10; pointer-events: none; line-height: 1.6;
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+    z-index: 10; pointer-events: none; line-height: 1.6; }
   .ok { color: #7dfba7; }
   #joy { position: fixed; left: 30px; bottom: 40px;
     width: 140px; height: 140px; border-radius: 50%;
@@ -39,21 +38,30 @@
 <script type="importmap">
 {
   "imports": {
-    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.webgpu.js"
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
   }
 }
 </script>
 
 <script type="module">
-import * as THREE from 'three/webgpu';
+import * as THREE from 'three';
 
 const hudRnd = document.getElementById('rnd');
 const hudFps = document.getElementById('fps');
 
+const texLoader = new THREE.TextureLoader();
+function loadSprite(path) {
+  const tex = texLoader.load(path);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
 let renderer;
 try {
-  renderer = new THREE.WebGPURenderer({ antialias: false, alpha: false });
-  await renderer.init();
+  renderer = new THREE.WebGLRenderer({ antialias: true });
 } catch (e) {
   hudRnd.innerHTML = 'Renderer GAGAL: ' + e.message;
   throw e;
@@ -64,15 +72,19 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.touchAction = 'none';
 
-hudRnd.innerHTML = 'Renderer: <span class="ok">WebGPU</span>';
+hudRnd.innerHTML = 'Renderer: <span class="ok">WebGL</span>';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xa8d0e8);
-scene.fog = new THREE.Fog(0xa8d0e8, 40, 100);
+const skyColor = 0xa8d0e8;
+scene.background = new THREE.Color(skyColor);
+scene.fog = new THREE.Fog(skyColor, 60, 140);
 
-// ============================================================
-// NOISE
-// ============================================================
+const sun = new THREE.DirectionalLight(0xfff0dd, 1.0);
+sun.position.set(40, 80, 30);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xa8c8e0, 0.6));
+scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.4));
+
 function hash2(x, y) {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
   return n - Math.floor(n);
@@ -92,187 +104,150 @@ function fbm(x, y, oct) {
   for (let i = 0; i < oct; i++) {
     v += a * valueNoise(x * f, y * f);
     total += a;
-    f *= 2.0;
+    f *= 2.03;
     a *= 0.5;
   }
   return v / total;
 }
 
-// ============================================================
-// VOXEL WORLD
-// ============================================================
-const GRID_X = 80;
-const GRID_Y = 16;
-const GRID_Z = 80;
+const WORLD_SIZE = 120;
+const WORLD_SEG = 128;
+const HEIGHT_SCALE = 12;
 
-const voxels = new Uint8Array(GRID_X * GRID_Y * GRID_Z);
+const terrainGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, WORLD_SEG, WORLD_SEG);
+terrainGeo.rotateX(-Math.PI / 2);
 
-function vIdx(x, y, z) {
-  return x + y * GRID_X + z * GRID_X * GRID_Y;
-}
-function getVoxel(x, y, z) {
-  if (x < 0 || x >= GRID_X || y < 0 || y >= GRID_Y || z < 0 || z >= GRID_Z) return 0;
-  return voxels[vIdx(x, y, z)];
-}
-function setVoxel(x, y, z, t) {
-  if (x < 0 || x >= GRID_X || y < 0 || y >= GRID_Y || z < 0 || z >= GRID_Z) return;
-  voxels[vIdx(x, y, z)] = t;
-}
+const pos = terrainGeo.attributes.position;
+const colors = new Float32Array(pos.count * 3);
 
-function terrainColumnHeight(gx, gz) {
-  const nx = gx * 0.06;
-  const nz = gz * 0.06;
-  let h = fbm(nx, nz);
-  h = Math.pow(h, 1.4);
-  const localN = valueNoise(gx * 0.25 + 100, gz * 0.25 + 100);
-  h += (localN - 0.5) * 0.15;
-  let height = Math.floor(3 + h * 8);
-  if (height < 1) height = 1;
-  if (height > GRID_Y - 2) height = GRID_Y - 2;
-  return height;
+const cLow = new THREE.Color(0x7ab04a);
+const cMid = new THREE.Color(0x5a8e3a);
+const cHigh = new THREE.Color(0x8a6a3a);
+const cPeak = new THREE.Color(0x9a8a5a);
+
+function terrainHeight(wx, wz) {
+  const nx = wx * 0.04;
+  const nz = wz * 0.04;
+  let h = fbm(nx + 50, nz + 50);
+  h = Math.pow(h, 1.3);
+  h = h * HEIGHT_SCALE;
+  const localN = valueNoise(wx * 0.15 + 200, wz * 0.15 + 200);
+  h += (localN - 0.5) * 2.5;
+  return h;
 }
 
-// Fill terrain
-for (let x = 0; x < GRID_X; x++) {
-  for (let z = 0; z < GRID_Z; z++) {
-    const h = terrainColumnHeight(x, z);
-    for (let y = 0; y <= h; y++) {
-      let type;
-      if (y === h) type = 1;
-      else if (y >= h - 2) type = 2;
-      else type = 3;
-      setVoxel(x, y, z, type);
-    }
+const _terrainCache = new Map();
+function terrainHeightCached(wx, wz) {
+  const key = (Math.round(wx * 2) / 2) + '_' + (Math.round(wz * 2) / 2);
+  let v = _terrainCache.get(key);
+  if (v === undefined) {
+    v = terrainHeight(wx, wz);
+    _terrainCache.set(key, v);
   }
+  return v;
 }
 
-// Place voxel trees
-function placeVoxelTree(cx, cz) {
-  const baseY = terrainColumnHeight(cx, cz) + 1;
-  const trunkH = 3 + Math.floor(Math.random() * 2);
-  for (let y = 0; y < trunkH; y++) {
-    setVoxel(cx, baseY + y, cz, 4);
+for (let i = 0; i < pos.count; i++) {
+  const x = pos.getX(i);
+  const z = pos.getZ(i);
+  const h = terrainHeight(x, z);
+  pos.setY(i, h);
+
+  const t = Math.max(0, Math.min(1, h / HEIGHT_SCALE));
+  let c;
+  if (t < 0.35) {
+    const tt = t / 0.35;
+    c = cLow.clone().lerp(cMid, tt);
+  } else if (t < 0.75) {
+    const tt = (t - 0.35) / 0.4;
+    c = cMid.clone().lerp(cHigh, tt);
+  } else {
+    const tt = (t - 0.75) / 0.25;
+    c = cHigh.clone().lerp(cPeak, tt);
   }
-  const leafY = baseY + trunkH;
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dy = 0; dy < 2; dy++) {
-        if (Math.abs(dx) === 1 && Math.abs(dz) === 1 && dy === 0) continue;
-        setVoxel(cx + dx, leafY + dy, cz + dz, 5);
-      }
-    }
-  }
-  setVoxel(cx, leafY + 2, cz, 5);
+
+  const v = (valueNoise(x * 0.5, z * 0.5) - 0.5) * 0.12;
+  colors[i * 3] = Math.max(0, Math.min(1, c.r + v));
+  colors[i * 3 + 1] = Math.max(0, Math.min(1, c.g + v));
+  colors[i * 3 + 2] = Math.max(0, Math.min(1, c.b + v));
 }
 
-// Trees in clusters
-const treeClusters = [
-  [10, 10, 5], [60, 12, 6], [20, 60, 5], [55, 55, 4],
-  [40, 30, 3], [70, 40, 4], [15, 40, 3], [45, 70, 4]
-];
-treeClusters.forEach(function(c) {
-  for (let i = 0; i < c[2]; i++) {
+terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+terrainGeo.computeVertexNormals();
+
+const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+scene.add(terrain);
+
+const frustumSize = 22;
+const aspect = innerWidth / innerHeight;
+const camera = new THREE.OrthographicCamera(
+  -frustumSize * aspect / 2, frustumSize * aspect / 2,
+  frustumSize / 2, -frustumSize / 2,
+  0.1, 500
+);
+
+const isoAngle = Math.atan(1 / Math.sqrt(2));
+const cameraDist = 90;
+const cameraYaw = Math.PI * 0.25;
+
+const spriteGroup = new THREE.Group();
+scene.add(spriteGroup);
+
+function placeSprite(tex, x, z, scale) {
+  const material = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    alphaTest: 0.5,
+    side: THREE.DoubleSide,
+    depthWrite: true
+  });
+  const geo = new THREE.PlaneGeometry(scale, scale);
+  const mesh = new THREE.Mesh(geo, material);
+  const y = terrainHeightCached(x, z);
+  mesh.position.set(x, y + scale * 0.4, z);
+  spriteGroup.add(mesh);
+  return mesh;
+}
+
+const treeTex = loadSprite('IMG_2075.png');
+const rockTex = loadSprite('IMG_2073.png');
+const bushTex = loadSprite('IMG_2082.png');
+const pineTex = loadSprite('IMG_2088.png');
+const mapleTex = loadSprite('IMG_2097.png');
+
+function placeTreeCluster(tex, cx, cz, count) {
+  for (let i = 0; i < count; i++) {
     const ang = Math.random() * Math.PI * 2;
     const rad = Math.random() * 5;
-    const tx = Math.floor(c[0] + Math.cos(ang) * rad);
-    const tz = Math.floor(c[1] + Math.sin(ang) * rad);
-    if (tx > 2 && tx < GRID_X - 3 && tz > 2 && tz < GRID_Z - 3) {
-      placeVoxelTree(tx, tz);
-    }
-  }
-});
-
-// ============================================================
-// MESH BUILDING - Face culling
-// ============================================================
-const FACES = [
-  { dir: [1, 0, 0],  v: [[1,0,0],[1,0,1],[1,1,1],[1,1,0]], shade: 0.75 },
-  { dir: [-1, 0, 0], v: [[0,0,0],[0,1,0],[0,1,1],[0,0,1]], shade: 0.75 },
-  { dir: [0, 1, 0],  v: [[0,1,1],[1,1,1],[1,1,0],[0,1,0]], shade: 1.0 },
-  { dir: [0, -1, 0], v: [[0,0,1],[0,0,0],[1,0,0],[1,0,1]], shade: 0.4 },
-  { dir: [0, 0, 1],  v: [[0,0,1],[1,0,1],[1,1,1],[0,1,1]], shade: 0.9 },
-  { dir: [0, 0, -1], v: [[0,0,0],[0,1,0],[1,1,0],[1,0,0]], shade: 0.55 }
-];
-
-const TYPE_COLORS = {
-  1: [0.42, 0.72, 0.28],  // grass
-  2: [0.55, 0.40, 0.25],  // dirt
-  3: [0.55, 0.55, 0.55],  // stone
-  4: [0.42, 0.28, 0.16],  // wood
-  5: [0.25, 0.58, 0.22]   // leaf
-};
-
-const positions = [];
-const colors = [];
-
-for (let x = 0; x < GRID_X; x++) {
-  for (let y = 0; y < GRID_Y; y++) {
-    for (let z = 0; z < GRID_Z; z++) {
-      const type = getVoxel(x, y, z);
-      if (type === 0) continue;
-
-      const baseCol = TYPE_COLORS[type];
-      if (!baseCol) continue;
-
-      for (let f = 0; f < 6; f++) {
-        const face = FACES[f];
-        const nx = x + face.dir[0];
-        const ny = y + face.dir[1];
-        const nz = z + face.dir[2];
-        if (getVoxel(nx, ny, nz) !== 0) continue;
-
-        const shade = face.shade;
-        const r = baseCol[0] * shade;
-        const g = baseCol[1] * shade;
-        const b = baseCol[2] * shade;
-
-        const v0 = face.v[0], v1 = face.v[1], v2 = face.v[2], v3 = face.v[3];
-
-        positions.push(
-          x + v0[0], y + v0[1], z + v0[2],
-          x + v1[0], y + v1[1], z + v1[2],
-          x + v2[0], y + v2[1], z + v2[2],
-          x + v0[0], y + v0[1], z + v0[2],
-          x + v2[0], y + v2[1], z + v2[2],
-          x + v3[0], y + v3[1], z + v3[2]
-        );
-
-        for (let i = 0; i < 6; i++) {
-          colors.push(r, g, b);
-        }
-      }
-    }
+    const x = cx + Math.cos(ang) * rad;
+    const z = cz + Math.sin(ang) * rad;
+    const s = 2.6 + Math.random() * 1.0;
+    placeSprite(tex, x, z, s);
   }
 }
 
-const voxelGeo = new THREE.BufferGeometry();
-voxelGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-voxelGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+placeTreeCluster(treeTex, -18, -18, 7);
+placeTreeCluster(treeTex, 20, -12, 6);
+placeTreeCluster(treeTex, -10, 20, 8);
+placeTreeCluster(pineTex, 22, 18, 5);
+placeTreeCluster(treeTex, -28, 2, 6);
+placeTreeCluster(pineTex, 5, -28, 5);
+placeTreeCluster(mapleTex, -2, 8, 4);
+placeTreeCluster(treeTex, 15, 3, 4);
+placeTreeCluster(mapleTex, -22, -8, 4);
 
-const voxelMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-const voxelMesh = new THREE.Mesh(voxelGeo, voxelMat);
-voxelMesh.position.set(-GRID_X / 2, 0, -GRID_Z / 2);
-scene.add(voxelMesh);
-
-// ============================================================
-// CAMERA
-// ============================================================
-const camera = new THREE.PerspectiveCamera(47, innerWidth / innerHeight, 0.1, 500);
-const camOffset = new THREE.Vector3(0, 14, 20);
-
-function getWorldHeight(wx, wz) {
-  const gx = Math.floor(wx + GRID_X / 2);
-  const gz = Math.floor(wz + GRID_Z / 2);
-  if (gx < 0 || gx >= GRID_X || gz < 0 || gz >= GRID_Z) return 0;
-  for (let y = GRID_Y - 1; y >= 0; y--) {
-    if (getVoxel(gx, y, gz) !== 0) return y + 1;
-  }
-  return 0;
+for (let i = 0; i < 8; i++) {
+  const ang = Math.random() * Math.PI * 2;
+  const rad = 15 + Math.random() * 25;
+  placeSprite(rockTex, Math.cos(ang) * rad, Math.sin(ang) * rad, 1.8 + Math.random() * 0.8);
+}
+for (let i = 0; i < 12; i++) {
+  const ang = Math.random() * Math.PI * 2;
+  const rad = 10 + Math.random() * 30;
+  placeSprite(bushTex, Math.cos(ang) * rad, Math.sin(ang) * rad, 1.6 + Math.random() * 0.6);
 }
 
-// ============================================================
-// PLAYER
-// ============================================================
 const playerGroup = new THREE.Group();
 
 const playerShadow = new THREE.Mesh(
@@ -287,43 +262,49 @@ const playerBody = new THREE.Mesh(
   new THREE.PlaneGeometry(1.0, 1.6),
   new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, side: THREE.DoubleSide })
 );
-playerBody.position.y = 0.9;
+playerBody.position.y = 0.85;
 playerGroup.add(playerBody);
 
 scene.add(playerGroup);
 
+const camPos = new THREE.Vector3();
+const camTarget = new THREE.Vector3();
 const camSmoothPos = new THREE.Vector3();
-const camSmoothTarget = new THREE.Vector3();
-const camDesiredPos = new THREE.Vector3();
-const camDesiredTarget = new THREE.Vector3();
+const camSmoothTarget = new THREE.Vector3(0, 0, 0);
 
 function updateCamera(instant) {
-  const py = getWorldHeight(playerGroup.position.x, playerGroup.position.z);
-  playerGroup.position.y = py;
-
-  camDesiredTarget.set(playerGroup.position.x, py + 1.2, playerGroup.position.z);
-  camDesiredPos.copy(camDesiredTarget).add(camOffset);
+  camTarget.set(
+    playerGroup.position.x,
+    terrainHeightCached(playerGroup.position.x, playerGroup.position.z) + 0.8,
+    playerGroup.position.z
+  );
+  camPos.set(
+    camTarget.x + cameraDist * Math.cos(isoAngle) * Math.sin(cameraYaw),
+    camTarget.y + cameraDist * Math.sin(isoAngle),
+    camTarget.z + cameraDist * Math.cos(isoAngle) * Math.cos(cameraYaw)
+  );
 
   if (instant) {
-    camSmoothPos.copy(camDesiredPos);
-    camSmoothTarget.copy(camDesiredTarget);
+    camSmoothPos.copy(camPos);
+    camSmoothTarget.copy(camTarget);
   } else {
-    camSmoothPos.lerp(camDesiredPos, 0.08);
-    camSmoothTarget.lerp(camDesiredTarget, 0.1);
+    camSmoothPos.lerp(camPos, 0.08);
+    camSmoothTarget.lerp(camTarget, 0.1);
   }
 
   camera.position.copy(camSmoothPos);
   camera.lookAt(camSmoothTarget);
 
+  spriteGroup.children.forEach(function(s) {
+    s.quaternion.copy(camera.quaternion);
+  });
   playerBody.quaternion.copy(camera.quaternion);
+  playerGroup.position.y = terrainHeightCached(playerGroup.position.x, playerGroup.position.z);
 }
 updateCamera(true);
 
-// ============================================================
-// CONTROLS
-// ============================================================
 let pinchDist = 0;
-let pinchStartFov = 47;
+let pinchStartZoom = 1;
 const el = renderer.domElement;
 
 el.addEventListener('touchstart', function(e) {
@@ -332,7 +313,7 @@ el.addEventListener('touchstart', function(e) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchDist = Math.hypot(dx, dy);
-    pinchStartFov = camera.fov;
+    pinchStartZoom = camera.zoom;
   }
 }, { passive: false });
 
@@ -344,7 +325,7 @@ el.addEventListener('touchmove', function(e) {
     const d = Math.hypot(dx, dy);
     if (pinchDist > 0) {
       const ratio = d / pinchDist;
-      camera.fov = Math.max(20, Math.min(70, pinchStartFov / ratio));
+      camera.zoom = Math.max(0.6, Math.min(3.0, pinchStartZoom * ratio));
       camera.updateProjectionMatrix();
     }
   }
@@ -418,11 +399,9 @@ function handleJoyMove(cx, cy) {
   joyKnob.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
 }
 
-// ============================================================
-// LOOP
-// ============================================================
-const playerSpeed = 8.0;
-const worldLimit = GRID_X / 2 - 2;
+const playerSpeed = 7.0;
+const cosY = Math.cos(cameraYaw);
+const sinY = Math.sin(cameraYaw);
 
 let frames = 0;
 let lastFpsT = performance.now();
@@ -434,10 +413,13 @@ function animate() {
   lastT = now;
 
   if (Math.abs(joyVecX) > 0.05 || Math.abs(joyVecY) > 0.05) {
-    playerGroup.position.x += joyVecX * playerSpeed * dt;
-    playerGroup.position.z += joyVecY * playerSpeed * dt;
-    playerGroup.position.x = Math.max(-worldLimit, Math.min(worldLimit, playerakGroup.position.x));
-    playerGroup.position.z = Math.max(-worldLimit, Math.min(worldLimit, playerGroup.position.z));
+    const wx = joyVecX * sinY - joyVecY * cosY;
+    const wz = -joyVecX * cosY - joyVecY * sinY;
+    playerGroup.position.x += wx * playerSpeed * dt;
+    playerGroup.position.z += wz * playerSpeed * dt;
+    const lim = WORLD_SIZE * 0.45;
+    playerGroup.position.x = Math.max(-lim, Math.min(lim, playerGroup.position.x));
+    playerGroup.position.z = Math.max(-lim, Math.min(lim, playerGroup.position.z));
   }
 
   updateCamera(false);
@@ -453,6 +435,16 @@ function animate() {
   requestAnimationFrame(animate);
 }
 animate();
+
+addEventListener('resize', function() {
+  const w = innerWidth, h = innerHeight, a = w / h;
+  camera.left = -frustumSize * a / 2;
+  camera.right = frustumSize * a / 2;
+  camera.top = frustumSize / 2;
+  camera.bottom = -frustumSize / 2;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
 </script>
 </body>
 </html>
