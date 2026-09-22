@@ -16,6 +16,13 @@
     z-index: 10; pointer-events: none; line-height: 1.6;
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
   .ok { color: #7dfba7; } .warn { color: #ffcc44; } .err { color: #ff7788; }
+  #resetBtn { position: fixed; top: 16px; right: 16px;
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #fff; font-size: 22px; cursor: pointer;
+    z-index: 10; -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
 <body>
@@ -24,6 +31,7 @@
   <div id="fps">-- FPS</div>
   <div id="info">--</div>
 </div>
+<div id="resetBtn">H</div>
 
 <script type="importmap">
 {
@@ -69,7 +77,7 @@ hudRnd.innerHTML = 'Renderer: <span class="ok">WebGPU</span>';
 const scene = new THREE.Scene();
 const skyColor = 0xb8d8e8;
 scene.background = new THREE.Color(skyColor);
-scene.fog = new THREE.Fog(skyColor, 35, 90);
+scene.fog = new THREE.Fog(skyColor, 80, 300);
 
 const sun = new THREE.DirectionalLight(0xfff0dd, 2.4);
 sun.position.set(40, 60, 30);
@@ -146,7 +154,7 @@ function makeBushSprite() {
   return makeTextureFromCanvas(c);
 }
 
-const groundGeo = new THREE.PlaneGeometry(200, 200);
+const groundGeo = new THREE.PlaneGeometry(300, 300);
 groundGeo.rotateX(-Math.PI / 2);
 const groundMat = new THREE.MeshLambertMaterial({ color: 0x88a860 });
 const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -207,21 +215,30 @@ placeSprite(treeTex, 6, 10, 2.7);
 placeSprite(treeTex, -2, -10, 2.9);
 placeSprite(treeTex, -20, 0, 3.0);
 placeSprite(treeTex, 15, -15, 2.8);
+placeSprite(treeTex, 25, 5, 2.9);
+placeSprite(treeTex, -30, -20, 3.1);
 
 placeSprite(rockTex, 4, 4, 2.0);
 placeSprite(rockTex, -8, -2, 1.8);
 placeSprite(rockTex, 12, 2, 2.2);
+placeSprite(rockTex, -18, 12, 2.0);
+placeSprite(rockTex, 22, -8, 1.9);
 
 placeSprite(bushTex, 2, -8, 2.0);
 placeSprite(bushTex, -12, 2, 1.8);
 placeSprite(bushTex, 10, 8, 2.1);
 placeSprite(bushTex, -4, 12, 1.9);
+placeSprite(bushTex, 18, 15, 2.0);
+placeSprite(bushTex, -25, 5, 1.9);
 
 placeSprite(grassTex, -5, 5, 1.2);
 placeSprite(grassTex, 3, 3, 1.0);
 placeSprite(grassTex, -3, -3, 1.1);
 placeSprite(grassTex, 7, -7, 1.0);
 placeSprite(grassTex, -7, 7, 1.1);
+placeSprite(grassTex, 12, -12, 1.2);
+placeSprite(grassTex, -15, -8, 1.0);
+placeSprite(grassTex, 20, 2, 1.1);
 
 const playerGeo = new THREE.PlaneGeometry(0.6, 0.6);
 const playerMat = new THREE.MeshBasicMaterial({ color: 0xff3366, side: THREE.DoubleSide });
@@ -229,6 +246,14 @@ const player = new THREE.Mesh(playerGeo, playerMat);
 player.rotation.x = -Math.PI / 2;
 player.position.set(0, 0.05, 0);
 scene.add(player);
+
+document.getElementById('resetBtn').addEventListener('click', function() {
+  panX = 0;
+  panZ = 0;
+  camera.zoom = 1.0;
+  camera.updateProjectionMatrix();
+  updateCamera();
+});
 
 let pinchDist = 0;
 let pinchStartZoom = 1;
@@ -260,14 +285,14 @@ el.addEventListener('touchmove', function(e) {
     lastX = e.touches[0].clientX;
     lastY = e.touches[0].clientY;
 
-    const s = 0.025 / camera.zoom;
+    const s = 0.012 / camera.zoom;
     const rightX = Math.cos(cameraYaw);
     const rightZ = -Math.sin(cameraYaw);
     const fwdX = -Math.sin(cameraYaw);
     const fwdZ = -Math.cos(cameraYaw);
 
-    panX -= (dx * rightX + dy * fwdX) * s;
-    panZ -= (dx * rightZ + dy * fwdZ) * s;
+    panX += (dx * rightX - dy * fwdX) * s;
+    panZ += (dx * rightZ - dy * fwdZ) * s;
     updateCamera();
   } else if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
