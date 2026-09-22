@@ -37,6 +37,15 @@
 import * as THREE from 'three/webgpu';
 
 const hudRnd = document.getElementById('rnd');
+const hudRnd = document.getElementById('rnd');
+const texLoader = new THREE.TextureLoader();
+async function loadSprite(path) {
+  const tex = await texLoader.loadAsync(path);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false;
+  return tex;
 const hudFps = document.getElementById('fps');
 const hudInfo = document.getElementById('info');
 
@@ -201,7 +210,7 @@ function placeSprite(tex, x, z, scale) {
   return mesh;
 }
 
-const treeTex = makeTreeSprite();
+const treeTex = await loadSprite('sprites/IMG_2075.png');
 const rockTex = makeRockSprite();
 const grassTex = makeGrassSprite();
 const bushTex = makeBushSprite();
