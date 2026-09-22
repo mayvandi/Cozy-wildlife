@@ -76,15 +76,33 @@ renderer.domElement.style.touchAction = 'none';
 hudRnd.innerHTML = 'Renderer: <span class="ok">WebGPU</span>';
 
 const scene = new THREE.Scene();
-const skyColor = 0xa8d0e8;
-scene.background = new THREE.Color(skyColor);
-scene.fog = new THREE.Fog(skyColor, 60, 140);
+scene.background = new THREE.Color(0xa8d0e8);
+scene.fog = new THREE.Fog(0xa8d0e8, 60, 140);
 
 const sun = new THREE.DirectionalLight(0xfff0dd, 2.5);
 sun.position.set(40, 80, 30);
 scene.add(sun);
 scene.add(new THREE.AmbientLight(0xa8c8e0, 0.9));
 scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.6));
+
+const skyGeo = new THREE.SphereGeometry(250, 16, 32);
+const skyColors = [];
+const skyPos = skyGeo.attributes.position;
+const skyTop = new THREE.Color(0x5a9ac8);
+const skyBot = new THREE.Color(0xe8e0c8);
+for (let i = 0; i < skyPos.count; i++) {
+  const y = skyPos.getY(i);
+  const t = Math.max(0, Math.min(1, (y / 250) * 0.5 + 0.5));
+  const c = skyBot.clone().lerp(skyTop, t);
+  skyColors.push(c.r, c.g, c.b);
+}
+skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyColors, 3));
+const skyMesh = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({
+  side: THREE.BackSide,
+  fog: false,
+  vertexColors: true
+}));
+scene.add(skyMesh);
 
 function hash2(x, y) {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
@@ -180,9 +198,60 @@ const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const terrain = new THREE.Mesh(terrainGeo, terrainMat);
 scene.add(terrain);
 
-const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 500);
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 1000);
 const camY = 6;
 const camZ = 16;
+
+const cloudGroup = new THREE.Group();
+scene.add(cloudGroup);
+
+function makeCloudTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 128, 64);
+  for (let i = 0; i < 12; i++) {
+    const cx = 20 + Math.random() * 88;
+    const cy = 20 + Math.random() * 24;
+    const r = 8 + Math.random() * 12;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+const cloudTex = makeCloudTexture();
+
+for (let i = 0; i < 12; i++) {
+  const mat = new THREE.MeshBasicMaterial({
+    map: cloudTex,
+    transparent: true,
+    opacity: 0.7 + Math.random() * 0.3,
+    depthWrite: false,
+    fog: false
+  });
+  const w = 30 + Math.random() * 30;
+  const geo = new THREE.PlaneGeometry(w, w * 0.5);
+  const cloud = new THREE.Mesh(geo, mat);
+  const ang = Math.random() * Math.PI * 2;
+  const rad = 50 + Math.random() * 80;
+  cloud.position.set(
+    Math.cos(ang) * rad,
+    40 + Math.random() * 30,
+    Math.sin(ang) * rad
+  );
+  cloud.userData.speed = 0.3 + Math.random() * 0.5;
+  cloudGroup.add(cloud);
+}
 
 const spriteGroup = new THREE.Group();
 scene.add(spriteGroup);
@@ -284,6 +353,8 @@ function updateCamera(instant) {
 
   camera.position.copy(camSmoothPos);
   camera.lookAt(camSmoothTarget);
+
+  skyMesh.position.copy(camera.position);
 
   spriteGroup.children.forEach(function(s) {
     s.quaternion.copy(camera.quaternion);
@@ -407,6 +478,12 @@ function animate() {
     playerGroup.position.x = Math.max(-lim, Math.min(lim, playerGroup.position.x));
     playerGroup.position.z = Math.max(-lim, Math.min(lim, playerGroup.position.z));
   }
+
+  cloudGroup.children.forEach(function(cloud) {
+    cloud.position.x += cloud.userData.speed * dt;
+    if (cloud.position.x > 150) cloud.position.x = -150;
+    cloud.quaternion.copy(camera.quaternion);
+  });
 
   updateCamera(false);
   renderer.render(scene, camera);
