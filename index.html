@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Sprite Test - 2.5D Isometric</title>
+<title>Octopath Test - Cozy Wildlife</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #b8d8e8;
@@ -15,14 +15,18 @@
     background: rgba(0,0,0,0.45); padding: 8px 12px; border-radius: 10px;
     z-index: 10; pointer-events: none; line-height: 1.6;
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-  .ok { color: #7dfba7; } .warn { color: #ffcc44; } .err { color: #ff7788; }
-  #resetBtn { position: fixed; top: 16px; right: 16px;
-    width: 44px; height: 44px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.35);
-    color: #fff; font-size: 22px; cursor: pointer;
-    z-index: 10; -webkit-tap-highlight-color: transparent; }
+  .ok { color: #7dfba7; }
+  #joy { position: fixed; left: 30px; bottom: 40px;
+    width: 140px; height: 140px; border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.35);
+    z-index: 5; touch-action: none; }
+  #joyKnob { position: absolute; left: 50%; top: 50%;
+    width: 55px; height: 55px; border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    border: 2px solid rgba(255,255,255,0.7);
+    transform: translate(-50%, -50%);
+    pointer-events: none; }
 </style>
 </head>
 <body>
@@ -31,7 +35,7 @@
   <div id="fps">-- FPS</div>
   <div id="info">--</div>
 </div>
-<div id="resetBtn">H</div>
+<div id="joy"><div id="joyKnob"></div></div>
 
 <script type="importmap">
 {
@@ -114,9 +118,6 @@ function makeRockSprite() {
   ctx.fillStyle = '#5a5448';
   ctx.fillRect(8, 26, 16, 2);
   ctx.fillRect(6, 24, 20, 2);
-  ctx.fillStyle = '#3a3428';
-  ctx.fillRect(14, 20, 1, 4);
-  ctx.fillRect(20, 22, 1, 3);
   return makeTextureFromCanvas(c);
 }
 
@@ -153,13 +154,13 @@ function makeBushSprite() {
   return makeTextureFromCanvas(c);
 }
 
-const groundGeo = new THREE.PlaneGeometry(300, 300);
+const groundGeo = new THREE.PlaneGeometry(400, 400);
 groundGeo.rotateX(-Math.PI / 2);
 const groundMat = new THREE.MeshLambertMaterial({ color: 0x88a860 });
 const ground = new THREE.Mesh(groundGeo, groundMat);
 scene.add(ground);
 
-const frustumSize = 18;
+const frustumSize = 14;
 const aspect = innerWidth / innerHeight;
 const camera = new THREE.OrthographicCamera(
   -frustumSize * aspect / 2, frustumSize * aspect / 2,
@@ -167,21 +168,10 @@ const camera = new THREE.OrthographicCamera(
   0.1, 1000
 );
 
-const isoAngle = Math.atan(1 / Math.sqrt(2));
-const cameraDist = 80;
-const cameraYaw = Math.PI * 0.25;
-let panX = 0;
-let panZ = 0;
-
-function updateCamera() {
-  camera.position.set(
-    panX + cameraDist * Math.cos(isoAngle) * Math.sin(cameraYaw),
-    cameraDist * Math.sin(isoAngle),
-    panZ + cameraDist * Math.cos(isoAngle) * Math.cos(cameraYaw)
-  );
-  camera.lookAt(panX, 0, panZ);
-}
-updateCamera();
+const camAngle = Math.PI / 4.5;
+const camDist = 100;
+const camHeight = camDist * Math.sin(camAngle);
+const camHoriz = camDist * Math.cos(camAngle);
 
 const spriteGroup = new THREE.Group();
 scene.add(spriteGroup);
@@ -197,7 +187,7 @@ function placeSprite(tex, x, z, scale) {
   const geo = new THREE.PlaneGeometry(scale, scale);
   const mesh = new THREE.Mesh(geo, material);
   mesh.position.set(x, scale * 0.5, z);
-  mesh.quaternion.copy(camera.quaternion);
+  mesh.userData.isSprite = true;
   spriteGroup.add(mesh);
   return mesh;
 }
@@ -207,68 +197,87 @@ const rockTex = makeRockSprite();
 const grassTex = makeGrassSprite();
 const bushTex = makeBushSprite();
 
-placeSprite(treeTex, -6, -6, 3.0);
-placeSprite(treeTex, 8, -4, 2.8);
-placeSprite(treeTex, -10, 6, 3.2);
-placeSprite(treeTex, 6, 10, 2.7);
-placeSprite(treeTex, -2, -10, 2.9);
-placeSprite(treeTex, -20, 0, 3.0);
-placeSprite(treeTex, 15, -15, 2.8);
-placeSprite(treeTex, 25, 5, 2.9);
-placeSprite(treeTex, -30, -20, 3.1);
+placeSprite(treeTex, -8, -8, 3.5);
+placeSprite(treeTex, 10, -6, 3.2);
+placeSprite(treeTex, -12, 8, 3.8);
+placeSprite(treeTex, 8, 12, 3.0);
+placeSprite(treeTex, -3, -14, 3.4);
+placeSprite(treeTex, -25, 2, 3.5);
+placeSprite(treeTex, 18, -18, 3.2);
+placeSprite(treeTex, 28, 6, 3.4);
+placeSprite(treeTex, -35, -22, 3.6);
 
-placeSprite(rockTex, 4, 4, 2.0);
-placeSprite(rockTex, -8, -2, 1.8);
-placeSprite(rockTex, 12, 2, 2.2);
-placeSprite(rockTex, -18, 12, 2.0);
-placeSprite(rockTex, 22, -8, 1.9);
+placeSprite(rockTex, 5, 5, 2.2);
+placeSprite(rockTex, -10, -3, 2.0);
+placeSprite(rockTex, 14, 3, 2.5);
+placeSprite(rockTex, -20, 14, 2.2);
+placeSprite(rockTex, 24, -10, 2.1);
 
-placeSprite(bushTex, 2, -8, 2.0);
-placeSprite(bushTex, -12, 2, 1.8);
-placeSprite(bushTex, 10, 8, 2.1);
-placeSprite(bushTex, -4, 12, 1.9);
-placeSprite(bushTex, 18, 15, 2.0);
-placeSprite(bushTex, -25, 5, 1.9);
+placeSprite(bushTex, 3, -10, 2.2);
+placeSprite(bushTex, -14, 3, 2.0);
+placeSprite(bushTex, 12, 10, 2.3);
+placeSprite(bushTex, -5, 14, 2.1);
+placeSprite(bushTex, 20, 18, 2.2);
+placeSprite(bushTex, -28, 6, 2.1);
 
-placeSprite(grassTex, -5, 5, 1.2);
-placeSprite(grassTex, 3, 3, 1.0);
-placeSprite(grassTex, -3, -3, 1.1);
-placeSprite(grassTex, 7, -7, 1.0);
-placeSprite(grassTex, -7, 7, 1.1);
-placeSprite(grassTex, 12, -12, 1.2);
-placeSprite(grassTex, -15, -8, 1.0);
-placeSprite(grassTex, 20, 2, 1.1);
+placeSprite(grassTex, -6, 7, 1.3);
+placeSprite(grassTex, 4, 4, 1.1);
+placeSprite(grassTex, -4, -5, 1.2);
+placeSprite(grassTex, 9, -9, 1.1);
+placeSprite(grassTex, -9, 9, 1.2);
+placeSprite(grassTex, 14, -14, 1.3);
+placeSprite(grassTex, -17, -10, 1.1);
+placeSprite(grassTex, 22, 3, 1.2);
 
-const playerGeo = new THREE.PlaneGeometry(0.6, 0.6);
-const playerMat = new THREE.MeshBasicMaterial({ color: 0xff3366, side: THREE.DoubleSide });
-const player = new THREE.Mesh(playerGeo, playerMat);
-player.rotation.x = -Math.PI / 2;
-player.position.set(0, 0.05, 0);
-scene.add(player);
+const playerGroup = new THREE.Group();
 
-document.getElementById('resetBtn').addEventListener('click', function() {
-  panX = 0;
-  panZ = 0;
-  camera.zoom = 1.0;
-  camera.updateProjectionMatrix();
-  updateCamera();
-});
+const playerShadow = new THREE.Mesh(
+  new THREE.CircleGeometry(0.6, 16),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
+);
+playerShadow.rotation.x = -Math.PI / 2;
+playerShadow.position.y = 0.02;
+playerGroup.add(playerShadow);
+
+const playerBody = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.2, 1.8),
+  new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, side: THREE.DoubleSide })
+);
+playerBody.position.y = 0.9;
+playerBody.userData.isSprite = true;
+playerGroup.add(playerBody);
+
+playerGroup.position.set(0, 0, 0);
+scene.add(playerGroup);
+
+const camPos = new THREE.Vector3();
+const camTarget = new THREE.Vector3();
+
+function updateCamera() {
+  camTarget.copy(playerGroup.position);
+  camTarget.y = 1.0;
+  camPos.set(
+    playerGroup.position.x,
+    camHeight,
+    playerGroup.position.z + camHoriz
+  );
+  camera.position.copy(camPos);
+  camera.lookAt(camTarget);
+
+  spriteGroup.children.forEach(function(s) {
+    s.quaternion.copy(camera.quaternion);
+  });
+  playerBody.quaternion.copy(camera.quaternion);
+}
+updateCamera();
 
 let pinchDist = 0;
 let pinchStartZoom = 1;
-let dragging = false;
-let lastX = 0;
-let lastY = 0;
 const el = renderer.domElement;
 
 el.addEventListener('touchstart', function(e) {
   e.preventDefault();
-  if (e.touches.length === 1) {
-    dragging = true;
-    lastX = e.touches[0].clientX;
-    lastY = e.touches[0].clientY;
-  } else if (e.touches.length === 2) {
-    dragging = false;
+  if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchDist = Math.hypot(dx, dy);
@@ -278,26 +287,13 @@ el.addEventListener('touchstart', function(e) {
 
 el.addEventListener('touchmove', function(e) {
   e.preventDefault();
-  if (e.touches.length === 1 && dragging) {
-    const dx = e.touches[0].clientX - lastX;
-    const dy = e.touches[0].clientY - lastY;
-    lastX = e.touches[0].clientX;
-    lastY = e.touches[0].clientY;
-
-    const s = 0.012 / camera.zoom;
-    const cosY = Math.cos(cameraYaw);
-    const sinY = Math.sin(cameraYaw);
-
-    panX -= (cosY * dx + sinY * dy) * s;
-    panZ -= (-sinY * dx + cosY * dy) * s;
-    updateCamera();
-  } else if (e.touches.length === 2) {
+  if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     const d = Math.hypot(dx, dy);
     if (pinchDist > 0) {
       const ratio = d / pinchDist;
-      camera.zoom = Math.max(0.5, Math.min(4.0, pinchStartZoom * ratio));
+      camera.zoom = Math.max(0.5, Math.min(3.5, pinchStartZoom * ratio));
       camera.updateProjectionMatrix();
     }
   }
@@ -305,35 +301,101 @@ el.addEventListener('touchmove', function(e) {
 
 el.addEventListener('touchend', function() {
   pinchDist = 0;
-  dragging = false;
 }, { passive: false });
 
-el.addEventListener('wheel', function(e) {
-  camera.zoom = Math.max(0.5, Math.min(4.0, camera.zoom * (1 - e.deltaY * 0.001)));
-  camera.updateProjectionMatrix();
+const joy = document.getElementById('joy');
+const joyKnob = document.getElementById('joyKnob');
+let joyActive = false;
+let joyTouchId = null;
+let joyCenterX = 0;
+let joyCenterY = 0;
+let joyVecX = 0;
+let joyVecY = 0;
+
+function joyRect() {
+  const r = joy.getBoundingClientRect();
+  joyCenterX = r.left + r.width / 2;
+  joyCenterY = r.top + r.height / 2;
+}
+
+joy.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (joyActive) return;
+  const t = e.changedTouches[0];
+  joyTouchId = t.identifier;
+  joyActive = true;
+  joyRect();
+  handleJoyMove(t.clientX, t.clientY);
 }, { passive: false });
 
-addEventListener('resize', function() {
-  const w = innerWidth, h = innerHeight, a = w / h;
-  camera.left = -frustumSize * a / 2;
-  camera.right = frustumSize * a / 2;
-  camera.top = frustumSize / 2;
-  camera.bottom = -frustumSize / 2;
-  camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
-});
+document.addEventListener('touchmove', function(e) {
+  if (!joyActive) return;
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.identifier === joyTouchId) {
+      e.preventDefault();
+      handleJoyMove(t.clientX, t.clientY);
+    }
+  }
+}, { passive: false });
+
+document.addEventListener('touchend', function(e) {
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.identifier === joyTouchId) {
+      joyActive = false;
+      joyTouchId = null;
+      joyVecX = 0;
+      joyVecY = 0;
+      joyKnob.style.transform = 'translate(-50%, -50%)';
+    }
+  }
+}, { passive: false });
+
+function handleJoyMove(cx, cy) {
+  let dx = cx - joyCenterX;
+  let dy = cy - joyCenterY;
+  const maxR = 55;
+  const d = Math.hypot(dx, dy);
+  if (d > maxR) {
+    dx = dx / d * maxR;
+    dy = dy / d * maxR;
+  }
+  joyVecX = dx / maxR;
+  joyVecY = dy / maxR;
+  joyKnob.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
+}
+
+const playerSpeed = 6.0;
+let facing = 1;
 
 let frames = 0;
 let lastFpsT = performance.now();
+let lastT = performance.now();
 
 function animate() {
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+
+  if (Math.abs(joyVecX) > 0.05 || Math.abs(joyVecY) > 0.05) {
+    const len = Math.hypot(joyVecX, joyVecY);
+    const nx = joyVecX / len;
+    const ny = joyVecY / len;
+    playerGroup.position.x += nx * playerSpeed * dt;
+    playerGroup.position.z += ny * playerSpeed * dt;
+    if (Math.abs(nx) > 0.15) facing = nx > 0 ? 1 : -1;
+  }
+
+  updateCamera();
   renderer.render(scene, camera);
   frames++;
-  const now = performance.now();
+
   if (now - lastFpsT > 500) {
     const fps = Math.round(frames * 1000 / (now - lastFpsT));
     hudFps.textContent = fps + ' FPS';
-    hudInfo.textContent = 'zoom ' + camera.zoom.toFixed(2) + ' . pan ' + panX.toFixed(0) + ',' + panZ.toFixed(0);
+    hudInfo.textContent = 'x ' + playerGroup.position.x.toFixed(1) + ' z ' + playerGroup.position.z.toFixed(1) + ' zoom ' + camera.zoom.toFixed(2);
     frames = 0;
     lastFpsT = now;
   }
