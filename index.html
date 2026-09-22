@@ -272,6 +272,8 @@ function updateCamera(instant) {
     playerGroup.position.x,
     py + camY,
     playerGroup.position.z + camZ
+  );
+
   if (instant) {
     camSmoothPos.copy(camPos);
     camSmoothTarget.copy(camTarget);
@@ -314,7 +316,6 @@ el.addEventListener('touchmove', function(e) {
     if (pinchDist > 0) {
       const ratio = d / pinchDist;
       camera.fov = Math.max(20, Math.min(60, pinchStartFov / ratio));
-camera.updateProjectionMatrix();
       camera.updateProjectionMatrix();
     }
   }
@@ -389,8 +390,6 @@ function handleJoyMove(cx, cy) {
 }
 
 const playerSpeed = 7.0;
-const cosY = Math.cos(cameraYaw);
-const sinY = Math.sin(cameraYaw);
 
 let frames = 0;
 let lastFpsT = performance.now();
@@ -402,10 +401,8 @@ function animate() {
   lastT = now;
 
   if (Math.abs(joyVecX) > 0.05 || Math.abs(joyVecY) > 0.05) {
-    const wx = joyVecX * sinY + joyVecY * cosY;
-    const wz = -joyVecX * cosY + joyVecY * sinY;
-    playerGroup.position.x += wx * playerSpeed * dt;
-    playerGroup.position.z += wz * playerSpeed * dt;
+    playerGroup.position.x += joyVecX * playerSpeed * dt;
+    playerGroup.position.z += joyVecY * playerSpeed * dt;
     const lim = WORLD_SIZE * 0.45;
     playerGroup.position.x = Math.max(-lim, Math.min(lim, playerGroup.position.x));
     playerGroup.position.z = Math.max(-lim, Math.min(lim, playerGroup.position.z));
