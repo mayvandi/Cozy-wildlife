@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -38,20 +39,20 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.webgpu.js"
   }
 }
 </script>
 
 <script type="module">
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 
 const hudRnd = document.getElementById('rnd');
 const hudFps = document.getElementById('fps');
 
 const texLoader = new THREE.TextureLoader();
-function loadSprite(path) {
-  const tex = texLoader.load(path);
+async function loadSprite(path) {
+  const tex = await texLoader.loadAsync(path);
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -61,9 +62,10 @@ function loadSprite(path) {
 
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new THREE.WebGPURenderer({ antialias: false, alpha: false });
+  await renderer.init();
 } catch (e) {
-  hudRnd.innerHTML = 'Renderer GAGAL: ' + e.message;
+  hudRnd.innerHTML = 'GAGAL: ' + e.message;
   throw e;
 }
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -72,18 +74,18 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.touchAction = 'none';
 
-hudRnd.innerHTML = 'Renderer: <span class="ok">WebGL</span>';
+hudRnd.innerHTML = 'Renderer: <span class="ok">WebGPU</span>';
 
 const scene = new THREE.Scene();
 const skyColor = 0xa8d0e8;
 scene.background = new THREE.Color(skyColor);
 scene.fog = new THREE.Fog(skyColor, 60, 140);
 
-const sun = new THREE.DirectionalLight(0xfff0dd, 1.0);
+const sun = new THREE.DirectionalLight(0xfff0dd, 2.5);
 sun.position.set(40, 80, 30);
 scene.add(sun);
-scene.add(new THREE.AmbientLight(0xa8c8e0, 0.6));
-scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.4));
+scene.add(new THREE.AmbientLight(0xa8c8e0, 0.9));
+scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.6));
 
 function hash2(x, y) {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
@@ -210,11 +212,11 @@ function placeSprite(tex, x, z, scale) {
   return mesh;
 }
 
-const treeTex = loadSprite('IMG_2075.png');
-const rockTex = loadSprite('IMG_2073.png');
-const bushTex = loadSprite('IMG_2082.png');
-const pineTex = loadSprite('IMG_2088.png');
-const mapleTex = loadSprite('IMG_2097.png');
+const treeTex = await loadSprite('IMG_2075.png');
+const rockTex = await loadSprite('IMG_2073.png');
+const bushTex = await loadSprite('IMG_2082.png');
+const pineTex = await loadSprite('IMG_2088.png');
+const mapleTex = await loadSprite('IMG_2097.png');
 
 function placeTreeCluster(tex, cx, cz, count) {
   for (let i = 0; i < count; i++) {
@@ -413,8 +415,8 @@ function animate() {
   lastT = now;
 
   if (Math.abs(joyVecX) > 0.05 || Math.abs(joyVecY) > 0.05) {
-    const wx = joyVecX * sinY - joyVecY * cosY;
-    const wz = -joyVecX * cosY - joyVecY * sinY;
+    const wx = joyVecX * sinY + joyVecY * cosY;
+    const wz = -joyVecX * cosY + joyVecY * sinY;
     playerGroup.position.x += wx * playerSpeed * dt;
     playerGroup.position.z += wz * playerSpeed * dt;
     const lim = WORLD_SIZE * 0.45;
