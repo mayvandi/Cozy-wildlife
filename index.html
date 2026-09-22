@@ -77,7 +77,6 @@ hudRnd.innerHTML = 'Renderer: <span class="ok">WebGPU</span>';
 const scene = new THREE.Scene();
 const skyColor = 0xb8d8e8;
 scene.background = new THREE.Color(skyColor);
-scene.fog = new THREE.Fog(skyColor, 80, 300);
 
 const sun = new THREE.DirectionalLight(0xfff0dd, 2.4);
 sun.position.set(40, 60, 30);
@@ -165,7 +164,7 @@ const aspect = innerWidth / innerHeight;
 const camera = new THREE.OrthographicCamera(
   -frustumSize * aspect / 2, frustumSize * aspect / 2,
   frustumSize / 2, -frustumSize / 2,
-  0.1, 500
+  0.1, 1000
 );
 
 const isoAngle = Math.atan(1 / Math.sqrt(2));
@@ -286,13 +285,11 @@ el.addEventListener('touchmove', function(e) {
     lastY = e.touches[0].clientY;
 
     const s = 0.012 / camera.zoom;
-    const rightX = Math.cos(cameraYaw);
-    const rightZ = -Math.sin(cameraYaw);
-    const fwdX = -Math.sin(cameraYaw);
-    const fwdZ = -Math.cos(cameraYaw);
+    const cosY = Math.cos(cameraYaw);
+    const sinY = Math.sin(cameraYaw);
 
-    panX += (dx * rightX - dy * fwdX) * s;
-    panZ += (dx * rightZ - dy * fwdZ) * s;
+    panX -= (cosY * dx + sinY * dy) * s;
+    panZ -= (-sinY * dx + cosY * dy) * s;
     updateCamera();
   } else if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
