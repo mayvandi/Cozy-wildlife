@@ -93,29 +93,6 @@ function makeTextureFromCanvas(c) {
   return tex;
 }
 
-function makeTreeSprite() {
-  const c = makeCanvas(32, 32);
-  const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 32, 32);
-  ctx.fillStyle = '#6a4a30';
-  ctx.fillRect(14, 20, 4, 12);
-  ctx.fillStyle = '#4a3420';
-  ctx.fillRect(17, 20, 1, 12);
-  ctx.fillStyle = '#3a6a2a';
-  ctx.fillRect(4, 16, 24, 6);
-  ctx.fillStyle = '#4a7a3a';
-  ctx.fillRect(6, 12, 20, 6);
-  ctx.fillStyle = '#5a8a4a';
-  ctx.fillRect(8, 8, 16, 6);
-  ctx.fillStyle = '#6a9a5a';
-  ctx.fillRect(10, 4, 12, 6);
-  ctx.fillStyle = '#7aaa6a';
-  ctx.fillRect(10, 4, 6, 2);
-  ctx.fillRect(8, 8, 4, 2);
-  ctx.fillRect(6, 12, 4, 2);
-  return makeTextureFromCanvas(c);
-}
-
 function makeRockSprite() {
   const c = makeCanvas(32, 32);
   const ctx = c.getContext('2d');
@@ -272,6 +249,8 @@ el.addEventListener('touchstart', function(e) {
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchDist = Math.hypot(dx, dy);
     pinchStartZoom = camera.zoom;
+  }
+}, { passive: false });
 
 el.addEventListener('touchmove', function(e) {
   e.preventDefault();
@@ -300,12 +279,12 @@ el.addEventListener('touchmove', function(e) {
       camera.updateProjectionMatrix();
     }
   }
-}, { passive: true });
+}, { passive: false });
 
 el.addEventListener('touchend', function() {
   pinchDist = 0;
   dragging = false;
-}, { passive: true });
+}, { passive: false });
 
 el.addEventListener('wheel', function(e) {
   camera.zoom = Math.max(0.5, Math.min(4.0, camera.zoom * (1 - e.deltaY * 0.001)));
