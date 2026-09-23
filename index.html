@@ -15,6 +15,7 @@
     background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 10px;
     z-index: 10; pointer-events: none; line-height: 1.6; }
   .ok { color: #7dfba7; }
+  .clock { color: #ffdd88; font-weight: 700; }
   #joy { position: fixed; left: 30px; bottom: 40px;
     width: 140px; height: 140px; border-radius: 50%;
     background: rgba(255,255,255,0.15);
@@ -32,6 +33,7 @@
 <div id="hud">
   <div id="rnd">Init...</div>
   <div id="fps">-- FPS</div>
+  <div id="clock" class="clock">--:--</div>
 </div>
 <div id="joy"><div id="joyKnob"></div></div>
 
@@ -48,6 +50,7 @@ import * as THREE from 'three/webgpu';
 
 const hudRnd = document.getElementById('rnd');
 const hudFps = document.getElementById('fps');
+const hudClock = document.getElementById('clock');
 
 const texLoader = new THREE.TextureLoader();
 async function loadSprite(path) {
@@ -271,7 +274,7 @@ stars.renderOrder = 1;
 scene.add(stars);
 
 let virtualTimeSky = 0;
-const DAY_DURATION = 600.0;
+const DAY_DURATION = 240.0;
 
 function hash2(x, y) {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
@@ -584,6 +587,7 @@ const playerSpeed = 7.0;
 let frames = 0;
 let lastFpsT = performance.now();
 let lastT = performance.now();
+let lastClockT = 0;
 
 function animate() {
   const now = performance.now();
@@ -604,6 +608,21 @@ function animate() {
   const sunElev = Math.sin(sunAngle);
   const dayF = Math.max(0, Math.min(1, (sunElev + 0.1) * 3.0));
   const sunsetF = Math.max(0, 1.0 - Math.abs(sunElev) * 3.5);
+
+  if (now - lastClockT > 500) {
+    lastClockT = now;
+    const hours24 = timeOfDay * 24;
+    const hh = Math.floor(hours24);
+    const mm = Math.floor((hours24 - hh) * 60);
+    let label = 'Pagi';
+    if (hh >= 5 && hh < 11) label = 'Pagi';
+    else if (hh >= 11 && hh < 15) label = 'Siang';
+    else if (hh >= 15 && hh < 18) label = 'Sore';
+    else label = 'Malam';
+    const padH = (hh < 10 ? '0' : '') + hh;
+    const padM = (mm < 10 ? '0' : '') + mm;
+    hudClock.textContent = label + ' ' + padH + ':' + padM;
+  }
 
   sunSprite.position.set(
     playerGroup.position.x + Math.cos(sunAngle) * 200,
@@ -652,7 +671,7 @@ function animate() {
       cloud.position.z = playerGroup.position.z + Math.sin(ang) * rad;
     }
 
-    cloud.material.opacity = cloud.userData.baseOpacity * dayF;
+    cloud.material.opacity = cloud.userData.baseOpacity * (0.25 + dayF * 0.75);
   }
 
   sun.intensity = Math.max(0, dayF * 2.5 - 0.2);
