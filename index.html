@@ -80,201 +80,16 @@ hudRnd.innerHTML = 'Renderer: <span class="ok">WebGPU</span>';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xa8d0e8);
-scene.fog = new THREE.Fog(0xa8d0e8, 60, 140);
 
-const sun = new THREE.DirectionalLight(0xfff0dd, 2.5);
-sun.position.set(40, 80, 30);
-scene.add(sun);
-
-const ambientLight = new THREE.AmbientLight(0xa8c8e0, 0.9);
+const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
 scene.add(ambientLight);
 
-scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.6));
+const sun = new THREE.DirectionalLight(0xfff0dd, 1.8);
+sun.position.set(20, 40, 20);
+scene.add(sun);
 
-const skyMat = new THREE.MeshBasicMaterial({
-  side: THREE.BackSide, fog: false, depthWrite: false, vertexColors: true
-});
-const skyGeo = new THREE.SphereGeometry(500, 24, 16);
-const skyCols = [];
-const skyPos = skyGeo.attributes.position;
-for (let i = 0; i < skyPos.count; i++) {
-  const y = skyPos.getY(i) / 500;
-  const t = Math.max(0, Math.min(1, y * 0.5 + 0.5));
-  skyCols.push(0.55 + t * 0.30, 0.72 + t * 0.20, 0.92 + t * 0.06);
-}
-skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyCols, 3));
-const skyMesh = new THREE.Mesh(skyGeo, skyMat);
-skyMesh.renderOrder = 0;
-scene.add(skyMesh);
-
-function hash2c(x, y) {
-  const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-  return n - Math.floor(n);
-}
-function vnoiseC(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y);
-  const xf = x - xi, yf = y - yi;
-  const u = xf * xf * (3 - 2 * xf);
-  const v = yf * yf * (3 - 2 * yf);
-  const a = hash2c(xi, yi), b = hash2c(xi + 1, yi);
-  const c = hash2c(xi, yi + 1), d = hash2c(xi + 1, yi + 1);
-  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
-}
-function fbmC(x, y, oct) {
-  let v = 0, a = 0.5, f = 1;
-  for (let i = 0; i < oct; i++) {
-    v += a * vnoiseC(x * f, y * f);
-    f *= 2.02;
-    a *= 0.5;
-  }
-  return v;
-}
-
-function makePuffyCloudTexture() {
-  const size = 256;
-  const c = document.createElement('canvas');
-  c.width = size;
-  c.height = size;
-  const ctx = c.getContext('2d');
-  const imgData = ctx.createImageData(size, size);
-  const data = imgData.data;
-  const cx = size / 2;
-  const cy = size * 0.55;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = (x - cx) / (size * 0.5);
-      const dy = (y - cy) / (size * 0.35);
-      const r = Math.sqrt(dx * dx + dy * dy);
-      const radialMask = Math.max(0, 1 - r);
-      const radialSoft = Math.pow(radialMask, 1.2);
-
-      const nx = x / size * 5 + Math.random() * 0.01;
-      const ny = y / size * 5 + Math.random() * 0.01;
-      const n = fbmC(nx, ny, 4);
-
-      let alpha = radialSoft * (n * 1.5 - 0.15);
-      alpha = Math.max(0, Math.min(1, alpha));
-      alpha = Math.pow(alpha, 1.1);
-
-      const bright = 0.85 + n * 0.15;
-      const idx = (y * size + x) * 4;
-      data[idx] = Math.floor(255 * bright);
-      data[idx + 1] = Math.floor(255 * bright);
-      data[idx + 2] = Math.floor(255 * bright);
-      data[idx + 3] = Math.floor(alpha * 255);
-    }
-  }
-  ctx.putImageData(imgData, 0, 0);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  return tex;
-}
-
-const cloudTextures = [];
-for (let i = 0; i < 5; i++) {
-  cloudTextures.push(makePuffyCloudTexture());
-}
-
-const cloudBillboards = [];
-for (let i = 0; i < 30; i++) {
-  const tex = cloudTextures[i % cloudTextures.length];
-  const w = 30 + Math.random() * 50;
-  const h = w * 0.55;
-  const mat = new THREE.MeshBasicMaterial({
-    map: tex,
-    transparent: true,
-    opacity: 0.7 + Math.random() * 0.25,
-    depthWrite: false,
-    fog: false,
-    side: THREE.DoubleSide
-  });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
-  const ang = Math.random() * Math.PI * 2;
-  const rad = 120 + Math.random() * 250;
-  mesh.position.set(
-    Math.cos(ang) * rad,
-    55 + Math.random() * 90,
-    Math.sin(ang) * rad
-  );
-  mesh.userData.baseY = mesh.position.y;
-  mesh.userData.bobPhase = Math.random() * Math.PI * 2;
-  mesh.userData.baseOpacity = mat.opacity;
-  mesh.renderOrder = 2;
-  scene.add(mesh);
-  cloudBillboards.push(mesh);
-}
-
-function makeSunTex() {
-  const c = document.createElement('canvas');
-  c.width = 128; c.height = 128;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0.0, 'rgba(255,255,240,1)');
-  g.addColorStop(0.15, 'rgba(255,245,200,1)');
-  g.addColorStop(0.35, 'rgba(255,225,150,0.6)');
-  g.addColorStop(0.7, 'rgba(255,200,100,0.15)');
-  g.addColorStop(1.0, 'rgba(255,180,80,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(c);
-}
-const sunSprite = new THREE.Mesh(
-  new THREE.PlaneGeometry(80, 80),
-  new THREE.MeshBasicMaterial({
-    map: makeSunTex(), transparent: true, depthWrite: false,
-    fog: false, blending: THREE.AdditiveBlending
-  })
-);
-sunSprite.renderOrder = 2;
-scene.add(sunSprite);
-
-function makeMoonTex() {
-  const c = document.createElement('canvas');
-  c.width = 128; c.height = 128;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0.0, 'rgba(250,250,255,1)');
-  g.addColorStop(0.25, 'rgba(230,235,250,0.9)');
-  g.addColorStop(0.5, 'rgba(200,215,240,0.4)');
-  g.addColorStop(1.0, 'rgba(160,190,230,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(c);
-}
-const moonSprite = new THREE.Mesh(
-  new THREE.PlaneGeometry(50, 50),
-  new THREE.MeshBasicMaterial({
-    map: makeMoonTex(), transparent: true, depthWrite: false,
-    fog: false, blending: THREE.AdditiveBlending
-  })
-);
-moonSprite.renderOrder = 2;
-scene.add(moonSprite);
-
-const starCount = 400;
-const starGeo = new THREE.BufferGeometry();
-const starPosArr = new Float32Array(starCount * 3);
-for (let i = 0; i < starCount; i++) {
-  const theta = Math.random() * Math.PI * 2;
-  const phi = Math.acos(Math.random() * 0.9 + 0.1);
-  const r = 400;
-  starPosArr[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-  starPosArr[i * 3 + 1] = Math.abs(r * Math.cos(phi));
-  starPosArr[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-}
-starGeo.setAttribute('position', new THREE.BufferAttribute(starPosArr, 3));
-const starMat = new THREE.PointsMaterial({
-  color: 0xffffff, size: 5.0, transparent: true, opacity: 0,
-  fog: false, sizeAttenuation: true, depthWrite: false
-});
-const stars = new THREE.Points(starGeo, starMat);
-stars.renderOrder = 1;
-scene.add(stars);
-
-let virtualTimeSky = 0;
-const DAY_DURATION = 240.0;
+const hemiLight = new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.5);
+scene.add(hemiLight);
 
 function hash2(x, y) {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
@@ -301,83 +116,92 @@ function fbm(x, y, oct) {
   return v / total;
 }
 
-const WORLD_SIZE = 120;
-const WORLD_SEG = 128;
-const HEIGHT_SCALE = 12;
+const MAP_SIZE = 60;
+const TILE_TYPES = 3;
 
-const terrainGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, WORLD_SEG, WORLD_SEG);
-terrainGeo.rotateX(-Math.PI / 2);
-
-const pos = terrainGeo.attributes.position;
-const colors = new Float32Array(pos.count * 3);
-
-const cLow = new THREE.Color(0x7ab04a);
-const cMid = new THREE.Color(0x5a8e3a);
-const cHigh = new THREE.Color(0x8a6a3a);
-const cPeak = new THREE.Color(0x9a8a5a);
-
-function terrainHeight(wx, wz) {
-  const nx = wx * 0.04;
-  const nz = wz * 0.04;
-  let h = fbm(nx + 50, nz + 50);
-  h = Math.pow(h, 1.3);
-  h = h * HEIGHT_SCALE;
-  const localN = valueNoise(wx * 0.15 + 200, wz * 0.15 + 200);
-  h += (localN - 0.5) * 2.5;
-  return h;
-}
-
-const _terrainCache = new Map();
-function terrainHeightCached(wx, wz) {
-  const key = (Math.round(wx * 2) / 2) + '_' + (Math.round(wz * 2) / 2);
-  let v = _terrainCache.get(key);
-  if (v === undefined) {
-    v = terrainHeight(wx, wz);
-    _terrainCache.set(key, v);
+const tiles = new Uint8Array(MAP_SIZE * MAP_SIZE);
+for (let z = 0; z < MAP_SIZE; z++) {
+  for (let x = 0; x < MAP_SIZE; x++) {
+    const n1 = fbm(x * 0.08 + 30, z * 0.08 + 30, 4);
+    const n2 = valueNoise(x * 0.15 + 500, z * 0.15 + 500);
+    let n = n1 * 0.7 + n2 * 0.3;
+    let t = 0;
+    if (n > 0.55) t = 0;
+    else if (n > 0.42) t = 1;
+    else t = 2;
+    tiles[z * MAP_SIZE + x] = t;
   }
-  return v;
 }
 
-for (let i = 0; i < pos.count; i++) {
-  const x = pos.getX(i);
-  const z = pos.getZ(i);
-  const h = terrainHeight(x, z);
-  pos.setY(i, h);
+const tileColors = [0x7ab04a, 0x8a6a3a, 0x4a90c8];
 
-  const t = Math.max(0, Math.min(1, h / HEIGHT_SCALE));
-  let c;
-  if (t < 0.35) {
-    const tt = t / 0.35;
-    c = cLow.clone().lerp(cMid, tt);
-  } else if (t < 0.75) {
-    const tt = (t - 0.35) / 0.4;
-    c = cMid.clone().lerp(cHigh, tt);
-  } else {
-    const tt = (t - 0.75) / 0.25;
-    c = cHigh.clone().lerp(cPeak, tt);
+const positions = [];
+const tileColorsArr = [];
+const indices = [];
+
+for (let z = 0; z < MAP_SIZE; z++) {
+  for (let x = 0; x < MAP_SIZE; x++) {
+    const t = tiles[z * MAP_SIZE + x];
+    const baseColor = new THREE.Color(tileColors[t]);
+    const variation = (valueNoise(x * 2.3, z * 1.7) - 0.5) * 0.10;
+    const r = Math.max(0, Math.min(1, baseColor.r + variation));
+    const g = Math.max(0, Math.min(1, baseColor.g + variation));
+    const b = Math.max(0, Math.min(1, baseColor.b + variation));
+
+    const wx = x - MAP_SIZE / 2;
+    const wz = z - MAP_SIZE / 2;
+    const v0 = positions.length / 3;
+
+    positions.push(
+      wx, 0, wz,
+      wx + 1, 0, wz,
+      wx + 1, 0, wz + 1,
+      wx, 0, wz + 1
+    );
+    for (let i = 0; i < 4; i++) {
+      tileColorsArr.push(r, g, b);
+    }
+    indices.push(v0, v0 + 1, v0 + 2, v0, v0 + 2, v0 + 3);
   }
-
-  const v = (valueNoise(x * 0.5, z * 0.5) - 0.5) * 0.12;
-  colors[i * 3] = Math.max(0, Math.min(1, c.r + v));
-  colors[i * 3 + 1] = Math.max(0, Math.min(1, c.g + v));
-  colors[i * 3 + 2] = Math.max(0, Math.min(1, c.b + v));
 }
 
-terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-terrainGeo.computeVertexNormals();
+const tileGeo = new THREE.BufferGeometry();
+tileGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+tileGeo.setAttribute('color', new THREE.Float32BufferAttribute(tileColorsArr, 3));
+tileGeo.setIndex(indices);
+tileGeo.computeVertexNormals();
 
-const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-const terrain = new THREE.Mesh(terrainGeo, terrainMat);
-scene.add(terrain);
+const tileMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const tileMesh = new THREE.Mesh(tileGeo, tileMat);
+scene.add(tileMesh);
 
-const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 2000);
-const camY = 6;
-const camZ = 16;
+function isWaterAt(wx, wz) {
+  const gx = Math.floor(wx + MAP_SIZE / 2);
+  const gz = Math.floor(wz + MAP_SIZE / 2);
+  if (gx < 0 || gx >= MAP_SIZE || gz < 0 || gz >= MAP_SIZE) return true;
+  return tiles[gz * MAP_SIZE + gx] === 2;
+}
+
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
+const FRUSTUM_SIZE = 22;
+function updateCameraProjection() {
+  const aspect = innerWidth / innerHeight;
+  camera.left = -FRUSTUM_SIZE * aspect / 2;
+  camera.right = FRUSTUM_SIZE * aspect / 2;
+  camera.top = FRUSTUM_SIZE / 2;
+  camera.bottom = -FRUSTUM_SIZE / 2;
+  camera.updateProjectionMatrix();
+}
+updateCameraProjection();
+
+const CAM_HEIGHT = 30;
+const CAM_DEPTH = 12;
 
 const spriteGroup = new THREE.Group();
 scene.add(spriteGroup);
 
 function placeSprite(tex, x, z, scale) {
+  if (isWaterAt(x, z)) return null;
   const material = new THREE.MeshBasicMaterial({
     map: tex,
     transparent: true,
@@ -387,8 +211,7 @@ function placeSprite(tex, x, z, scale) {
   });
   const geo = new THREE.PlaneGeometry(scale, scale);
   const mesh = new THREE.Mesh(geo, material);
-  const y = terrainHeightCached(x, z);
-  mesh.position.set(x, y + scale * 0.4, z);
+  mesh.position.set(x, scale * 0.5, z);
   spriteGroup.add(mesh);
   return mesh;
 }
@@ -399,53 +222,73 @@ const bushTex = await loadSprite('IMG_2082.png');
 const pineTex = await loadSprite('IMG_2088.png');
 const mapleTex = await loadSprite('IMG_2097.png');
 
-function placeTreeCluster(tex, cx, cz, count) {
+function placeTreeCluster(tex, cx, cz, count, size) {
   for (let i = 0; i < count; i++) {
-    const ang = Math.random() * Math.PI * 2;
-    const rad = Math.random() * 5;
-    const x = cx + Math.cos(ang) * rad;
-    const z = cz + Math.sin(ang) * rad;
-    const s = 2.6 + Math.random() * 1.0;
-    placeSprite(tex, x, z, s);
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const ang = Math.random() * Math.PI * 2;
+      const rad = Math.random() * 4;
+      const x = cx + Math.cos(ang) * rad;
+      const z = cz + Math.sin(ang) * rad;
+      if (!isWaterAt(x, z)) {
+        const s = size * (0.85 + Math.random() * 0.3);
+        placeSprite(tex, x, z, s);
+        break;
+      }
+    }
   }
 }
 
-placeTreeCluster(treeTex, -18, -18, 7);
-placeTreeCluster(treeTex, 20, -12, 6);
-placeTreeCluster(treeTex, -10, 20, 8);
-placeTreeCluster(pineTex, 22, 18, 5);
-placeTreeCluster(treeTex, -28, 2, 6);
-placeTreeCluster(pineTex, 5, -28, 5);
-placeTreeCluster(mapleTex, -2, 8, 4);
-placeTreeCluster(treeTex, 15, 3, 4);
-placeTreeCluster(mapleTex, -22, -8, 4);
+placeTreeCluster(treeTex, -18, -18, 6, 2.8);
+placeTreeCluster(treeTex, 18, -12, 5, 2.8);
+placeTreeCluster(treeTex, -10, 18, 7, 2.8);
+placeTreeCluster(pineTex, 20, 16, 5, 2.8);
+placeTreeCluster(treeTex, -24, 2, 5, 2.8);
+placeTreeCluster(pineTex, 5, -22, 5, 2.8);
+placeTreeCluster(mapleTex, -2, 8, 4, 2.8);
+placeTreeCluster(treeTex, 14, 3, 4, 2.8);
+placeTreeCluster(mapleTex, -20, -8, 4, 2.8);
 
-for (let i = 0; i < 8; i++) {
-  const ang = Math.random() * Math.PI * 2;
-  const rad = 15 + Math.random() * 25;
-  placeSprite(rockTex, Math.cos(ang) * rad, Math.sin(ang) * rad, 1.8 + Math.random() * 0.8);
-}
 for (let i = 0; i < 12; i++) {
-  const ang = Math.random() * Math.PI * 2;
-  const rad = 10 + Math.random() * 30;
-  placeSprite(bushTex, Math.cos(ang) * rad, Math.sin(ang) * rad, 1.6 + Math.random() * 0.6);
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const ang = Math.random() * Math.PI * 2;
+    const rad = 8 + Math.random() * 20;
+    const x = Math.cos(ang) * rad;
+    const z = Math.sin(ang) * rad;
+    if (!isWaterAt(x, z)) {
+      placeSprite(rockTex, x, z, 1.6 + Math.random() * 0.6);
+      break;
+    }
+  }
+}
+
+for (let i = 0; i < 20; i++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const ang = Math.random() * Math.PI * 2;
+    const rad = 5 + Math.random() * 25;
+    const x = Math.cos(ang) * rad;
+    const z = Math.sin(ang) * rad;
+    if (!isWaterAt(x, z)) {
+      placeSprite(bushTex, x, z, 1.4 + Math.random() * 0.5);
+      break;
+    }
+  }
 }
 
 const playerGroup = new THREE.Group();
 
 const playerShadow = new THREE.Mesh(
-  new THREE.CircleGeometry(0.55, 16),
-  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false })
+  new THREE.CircleGeometry(0.45, 16),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false })
 );
 playerShadow.rotation.x = -Math.PI / 2;
 playerShadow.position.y = 0.05;
 playerGroup.add(playerShadow);
 
 const playerBody = new THREE.Mesh(
-  new THREE.PlaneGeometry(1.0, 1.6),
+  new THREE.PlaneGeometry(1.0, 1.4),
   new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, side: THREE.DoubleSide })
 );
-playerBody.position.y = 0.85;
+playerBody.position.y = 0.7;
 playerGroup.add(playerBody);
 
 scene.add(playerGroup);
@@ -456,38 +299,34 @@ const camSmoothPos = new THREE.Vector3();
 const camSmoothTarget = new THREE.Vector3(0, 0, 0);
 
 function updateCamera(instant) {
-  const py = terrainHeightCached(playerGroup.position.x, playerGroup.position.z);
-  camTarget.set(playerGroup.position.x, py + 1.2, playerGroup.position.z);
+  camTarget.set(playerGroup.position.x, 0, playerGroup.position.z);
   camPos.set(
     playerGroup.position.x,
-    py + camY,
-    playerGroup.position.z + camZ
+    CAM_HEIGHT,
+    playerGroup.position.z + CAM_DEPTH
   );
 
   if (instant) {
     camSmoothPos.copy(camPos);
     camSmoothTarget.copy(camTarget);
   } else {
-    camSmoothPos.lerp(camPos, 0.08);
-    camSmoothTarget.lerp(camTarget, 0.1);
+    camSmoothPos.lerp(camPos, 0.10);
+    camSmoothTarget.lerp(camTarget, 0.12);
   }
 
   camera.position.copy(camSmoothPos);
   camera.lookAt(camSmoothTarget);
 
-  skyMesh.position.copy(camera.position);
-  stars.position.copy(camera.position);
-
   spriteGroup.children.forEach(function(s) {
     s.quaternion.copy(camera.quaternion);
   });
   playerBody.quaternion.copy(camera.quaternion);
-  playerGroup.position.y = terrainHeightCached(playerGroup.position.x, playerGroup.position.z);
 }
 updateCamera(true);
 
 let pinchDist = 0;
-let pinchStartFov = 38;
+let pinchStartFrustum = FRUSTUM_SIZE;
+let currentFrustum = FRUSTUM_SIZE;
 const el = renderer.domElement;
 
 el.addEventListener('touchstart', function(e) {
@@ -496,7 +335,7 @@ el.addEventListener('touchstart', function(e) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchDist = Math.hypot(dx, dy);
-    pinchStartFov = camera.fov;
+    pinchStartFrustum = currentFrustum;
   }
 }, { passive: false });
 
@@ -508,7 +347,12 @@ el.addEventListener('touchmove', function(e) {
     const d = Math.hypot(dx, dy);
     if (pinchDist > 0) {
       const ratio = d / pinchDist;
-      camera.fov = Math.max(20, Math.min(60, pinchStartFov / ratio));
+      currentFrustum = Math.max(10, Math.min(40, pinchStartFrustum / ratio));
+      const aspect = innerWidth / innerHeight;
+      camera.left = -currentFrustum * aspect / 2;
+      camera.right = currentFrustum * aspect / 2;
+      camera.top = currentFrustum / 2;
+      camera.bottom = -currentFrustum / 2;
       camera.updateProjectionMatrix();
     }
   }
@@ -582,7 +426,11 @@ function handleJoyMove(cx, cy) {
   joyKnob.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
 }
 
-const playerSpeed = 7.0;
+const playerSpeed = 6.0;
+const PLAYER_RADIUS = 0.4;
+
+let virtualTimeSky = 0;
+const DAY_DURATION = 240.0;
 
 let frames = 0;
 let lastFpsT = performance.now();
@@ -595,11 +443,23 @@ function animate() {
   lastT = now;
 
   if (Math.abs(joyVecX) > 0.05 || Math.abs(joyVecY) > 0.05) {
-    playerGroup.position.x += joyVecX * playerSpeed * dt;
-    playerGroup.position.z += joyVecY * playerSpeed * dt;
-    const lim = WORLD_SIZE * 0.45;
+    const nx = playerGroup.position.x + joyVecX * playerSpeed * dt;
+    const nz = playerGroup.position.z + joyVecY * playerSpeed * dt;
+
+    if (!isWaterAt(nx + PLAYER_RADIUS * Math.sign(joyVecX || 1), playerGroup.position.z)) {
+      playerGroup.position.x = nx;
+    }
+    if (!isWaterAt(playerGroup.position.x, nz + PLAYER_RADIUS * Math.sign(joyVecY || 1))) {
+      playerGroup.position.z = nz;
+    }
+
+    const lim = MAP_SIZE / 2 - 2;
     playerGroup.position.x = Math.max(-lim, Math.min(lim, playerGroup.position.x));
     playerGroup.position.z = Math.max(-lim, Math.min(lim, playerGroup.position.z));
+
+    if (Math.abs(joyVecX) > 0.15) {
+      playerBody.scale.x = joyVecX > 0 ? 1 : -1;
+    }
   }
 
   virtualTimeSky += dt;
@@ -614,74 +474,34 @@ function animate() {
     const hours24 = timeOfDay * 24;
     const hh = Math.floor(hours24);
     const mm = Math.floor((hours24 - hh) * 60);
-    let label = 'Pagi';
+    let label = 'Malam';
     if (hh >= 5 && hh < 11) label = 'Pagi';
     else if (hh >= 11 && hh < 15) label = 'Siang';
     else if (hh >= 15 && hh < 18) label = 'Sore';
-    else label = 'Malam';
     const padH = (hh < 10 ? '0' : '') + hh;
     const padM = (mm < 10 ? '0' : '') + mm;
     hudClock.textContent = label + ' ' + padH + ':' + padM;
   }
 
-  sunSprite.position.set(
-    playerGroup.position.x + Math.cos(sunAngle) * 200,
-    playerGroup.position.y + sunElev * 200,
-    playerGroup.position.z + 30
+  const ambientR = 0.15 + dayF * 0.85 + sunsetF * 0.30;
+  const ambientG = 0.15 + dayF * 0.85 + sunsetF * 0.15;
+  const ambientB = 0.25 + dayF * 0.75 - sunsetF * 0.05;
+  ambientLight.color.setRGB(ambientR, ambientG, ambientB);
+  ambientLight.intensity = 0.35 + dayF * 0.85;
+
+  sun.intensity = 0.3 + dayF * 1.5;
+  sun.color.setRGB(
+    0.8 + sunsetF * 0.2,
+    0.85 - sunsetF * 0.15,
+    0.75 - sunsetF * 0.35
   );
-  sunSprite.quaternion.copy(camera.quaternion);
-  sunSprite.visible = sunElev > -0.15;
 
-  moonSprite.position.set(
-    playerGroup.position.x - Math.cos(sunAngle) * 200,
-    playerGroup.position.y - sunElev * 200,
-    playerGroup.position.z + 40
-  );
-  moonSprite.quaternion.copy(camera.quaternion);
-  moonSprite.visible = -sunElev > -0.15;
+  hemiLight.intensity = 0.15 + dayF * 0.4;
 
-  skyMesh.position.copy(camera.position);
-  stars.position.copy(camera.position);
-
-  const skyR = 0.15 + dayF * 0.85 + sunsetF * 0.55;
-  const skyG = 0.18 + dayF * 0.82 + sunsetF * 0.20;
-  const skyB = 0.30 + dayF * 0.70 - sunsetF * 0.15;
-  skyMat.color.setRGB(skyR, skyG, skyB);
-
-  const bgR = 0.02 + dayF * 0.60 + sunsetF * 0.45;
-  const bgG = 0.03 + dayF * 0.56 + sunsetF * 0.15;
-  const bgB = 0.08 + dayF * 0.44 - sunsetF * 0.05;
+  const bgR = 0.02 + dayF * 0.63 + sunsetF * 0.45;
+  const bgG = 0.03 + dayF * 0.78 + sunsetF * 0.15;
+  const bgB = 0.08 + dayF * 0.83 - sunsetF * 0.05;
   scene.background.setRGB(bgR, bgG, bgB);
-  scene.fog.color.setRGB(bgR, bgG, bgB);
-
-  starMat.opacity = Math.max(0, Math.min(1, -sunElev * 8 + 0.7));
-
-  for (let i = 0; i < cloudBillboards.length; i++) {
-    const cloud = cloudBillboards[i];
-    cloud.quaternion.copy(camera.quaternion);
-    cloud.position.y = cloud.userData.baseY + Math.sin(virtualTimeSky * 0.1 + cloud.userData.bobPhase) * 0.5;
-
-    const dx = cloud.position.x - playerGroup.position.x;
-    const dz = cloud.position.z - playerGroup.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist > 500) {
-      const ang = Math.random() * Math.PI * 2;
-      const rad = 120 + Math.random() * 200;
-      cloud.position.x = playerGroup.position.x + Math.cos(ang) * rad;
-      cloud.position.z = playerGroup.position.z + Math.sin(ang) * rad;
-    }
-
-    cloud.material.opacity = cloud.userData.baseOpacity * (0.25 + dayF * 0.75);
-  }
-
-  sun.intensity = Math.max(0, dayF * 2.5 - 0.2);
-  sun.position.set(
-    playerGroup.position.x + Math.cos(sunAngle) * 40,
-    playerGroup.position.y + Math.max(10, sunElev * 80 + 20),
-    playerGroup.position.z + 30
-  );
-
-  ambientLight.intensity = 0.15 + dayF * 0.95;
 
   updateCamera(false);
   renderer.render(scene, camera);
@@ -698,8 +518,7 @@ function animate() {
 animate();
 
 addEventListener('resize', function() {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
+  updateCameraProjection();
   renderer.setSize(innerWidth, innerHeight);
 });
 </script>
