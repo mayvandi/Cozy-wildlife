@@ -91,11 +91,11 @@ scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5a6a3a, 0.6));
 const skyMat = new THREE.MeshBasicMaterial({
   side: THREE.BackSide, fog: false, depthWrite: false, vertexColors: true
 });
-const skyGeo = new THREE.SphereGeometry(250, 24, 16);
+const skyGeo = new THREE.SphereGeometry(500, 24, 16);
 const skyCols = [];
 const skyPos = skyGeo.attributes.position;
 for (let i = 0; i < skyPos.count; i++) {
-  const y = skyPos.getY(i) / 250;
+  const y = skyPos.getY(i) / 500;
   const t = Math.max(0, Math.min(1, y * 0.5 + 0.5));
   skyCols.push(0.55 + t * 0.30, 0.72 + t * 0.20, 0.92 + t * 0.06);
 }
@@ -126,45 +126,82 @@ function fbmC(x, y, oct) {
   }
   return v;
 }
-function makeCloudTexture() {
-  const size = 512;
+
+function makePuffyCloudTexture() {
+  const size = 256;
   const c = document.createElement('canvas');
-  c.width = size; c.height = size;
+  c.width = size;
+  c.height = size;
   const ctx = c.getContext('2d');
   const imgData = ctx.createImageData(size, size);
   const data = imgData.data;
+  const cx = size / 2;
+  const cy = size * 0.55;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const nx = x / size * 6;
-      const ny = y / size * 6;
-      const n = fbmC(nx, ny, 5);
-      const cloud = Math.max(0, Math.min(1, (n - 0.33) * 5.0));
+      const dx = (x - cx) / (size * 0.5);
+      const dy = (y - cy) / (size * 0.35);
+      const r = Math.sqrt(dx * dx + dy * dy);
+      const radialMask = Math.max(0, 1 - r);
+      const radialSoft = Math.pow(radialMask, 1.2);
+
+      const nx = x / size * 5 + Math.random() * 0.01;
+      const ny = y / size * 5 + Math.random() * 0.01;
+      const n = fbmC(nx, ny, 4);
+
+      let alpha = radialSoft * (n * 1.5 - 0.15);
+      alpha = Math.max(0, Math.min(1, alpha));
+      alpha = Math.pow(alpha, 1.1);
+
+      const bright = 0.85 + n * 0.15;
       const idx = (y * size + x) * 4;
-      data[idx] = 255;
-      data[idx + 1] = 255;
-      data[idx + 2] = 255;
-      data[idx + 3] = Math.floor(cloud * 230);
+      data[idx] = Math.floor(255 * bright);
+      data[idx + 1] = Math.floor(255 * bright);
+      data[idx + 2] = Math.floor(255 * bright);
+      data[idx + 3] = Math.floor(alpha * 255);
     }
   }
   ctx.putImageData(imgData, 0, 0);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
   return tex;
 }
-const cloudTex = makeCloudTexture();
 
-const cloudGeo = new THREE.PlaneGeometry(1200, 1200);
-cloudGeo.rotateX(Math.PI / 2);
-const cloudMat = new THREE.MeshBasicMaterial({
-  map: cloudTex, transparent: true, depthWrite: false,
-  fog: false, side: THREE.DoubleSide, opacity: 0.65
-});
-const cloudPlane = new THREE.Mesh(cloudGeo, cloudMat);
-cloudPlane.position.y = 12;
-cloudPlane.renderOrder = 1;
-scene.add(cloudPlane);
+const cloudTextures = [];
+for (let i = 0; i < 5; i++) {
+  cloudTextures.push(makePuffyCloudTexture());
+}
+
+const cloudBillboards = [];
+for (let i = 0; i < 30; i++) {
+  const tex = cloudTextures[i % cloudTextures.length];
+  const w = 30 + Math.random() * 50;
+  const h = w * 0.55;
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    opacity: 0.7 + Math.random() * 0.25,
+    depthWrite: false,
+    fog: false,
+    side: THREE.DoubleSide
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  const ang = Math.random() * Math.PI * 2;
+  const rad = 120 + Math.random() * 250;
+  mesh.position.set(
+    Math.cos(ang) * rad,
+    55 + Math.random() * 90,
+    Math.sin(ang) * rad
+  );
+  mesh.userData.baseY = mesh.position.y;
+  mesh.userData.bobPhase = Math.random() * Math.PI * 2;
+  mesh.userData.baseOpacity = mat.opacity;
+  mesh.renderOrder = 2;
+  scene.add(mesh);
+  cloudBillboards.push(mesh);
+}
 
 function makeSunTex() {
   const c = document.createElement('canvas');
@@ -219,14 +256,14 @@ const starPosArr = new Float32Array(starCount * 3);
 for (let i = 0; i < starCount; i++) {
   const theta = Math.random() * Math.PI * 2;
   const phi = Math.acos(Math.random() * 0.9 + 0.1);
-  const r = 200;
+  const r = 400;
   starPosArr[i * 3] = r * Math.sin(phi) * Math.cos(theta);
   starPosArr[i * 3 + 1] = Math.abs(r * Math.cos(phi));
   starPosArr[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
 }
 starGeo.setAttribute('position', new THREE.BufferAttribute(starPosArr, 3));
 const starMat = new THREE.PointsMaterial({
-  color: 0xffffff, size: 2.0, transparent: true, opacity: 0,
+  color: 0xffffff, size: 5.0, transparent: true, opacity: 0,
   fog: false, sizeAttenuation: true, depthWrite: false
 });
 const stars = new THREE.Points(starGeo, starMat);
@@ -330,7 +367,7 @@ const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const terrain = new THREE.Mesh(terrainGeo, terrainMat);
 scene.add(terrain);
 
-const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 2000);
 const camY = 6;
 const camZ = 16;
 
@@ -585,6 +622,7 @@ function animate() {
   moonSprite.visible = -sunElev > -0.15;
 
   skyMesh.position.copy(camera.position);
+  stars.position.copy(camera.position);
 
   const skyR = 0.15 + dayF * 0.85 + sunsetF * 0.55;
   const skyG = 0.18 + dayF * 0.82 + sunsetF * 0.20;
@@ -597,13 +635,25 @@ function animate() {
   scene.background.setRGB(bgR, bgG, bgB);
   scene.fog.color.setRGB(bgR, bgG, bgB);
 
-  starMat.opacity = Math.max(0, Math.min(1, -sunElev * 6 + 0.5));
+  starMat.opacity = Math.max(0, Math.min(1, -sunElev * 8 + 0.7));
 
-  cloudPlane.position.x = playerGroup.position.x;
-  cloudPlane.position.z = playerGroup.position.z;
-  cloudTex.offset.x += dt * 0.004;
-  cloudTex.offset.y += dt * 0.0015;
-  cloudMat.opacity = (0.60 + dayF * 0.35) * dayF;
+  for (let i = 0; i < cloudBillboards.length; i++) {
+    const cloud = cloudBillboards[i];
+    cloud.quaternion.copy(camera.quaternion);
+    cloud.position.y = cloud.userData.baseY + Math.sin(virtualTimeSky * 0.1 + cloud.userData.bobPhase) * 0.5;
+
+    const dx = cloud.position.x - playerGroup.position.x;
+    const dz = cloud.position.z - playerGroup.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist > 500) {
+      const ang = Math.random() * Math.PI * 2;
+      const rad = 120 + Math.random() * 200;
+      cloud.position.x = playerGroup.position.x + Math.cos(ang) * rad;
+      cloud.position.z = playerGroup.position.z + Math.sin(ang) * rad;
+    }
+
+    cloud.material.opacity = cloud.userData.baseOpacity * dayF;
+  }
 
   sun.intensity = Math.max(0, dayF * 2.5 - 0.2);
   sun.position.set(
